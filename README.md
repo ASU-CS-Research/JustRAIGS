@@ -23,21 +23,25 @@ the command below to do so, as this will leverage the [lambda-stack](https://lam
    ```bash
    python3 -m venv just-raigs --system-site-packages
    ```
-3. Activate the virtual environment:
+3. If you are not in `bash` shell, switch to it:
+    ```bash
+    bash
+    ```
+4. Activate the virtual environment:
    ```bash
    source just-raigs/bin/activate
    ```
-4. Note that the [lambda-stack](https://lambdalabs.com/lambda-stack-deep-learning-software) will have installed most of
+5. Note that the [lambda-stack](https://lambdalabs.com/lambda-stack-deep-learning-software) will have installed most of
 the deep learning packages you require for you:
     ```bash
     pip list
     ```
-5. I have created an environment for us to use, which is stored in the `requirements.txt` file. You can install all the
+6. I have created an environment for us to use, which is stored in the `requirements.txt` file. You can install all the
 required packages with the following command:
    ```bash
    pip install -r requirements.txt
    ```
-6. Any other packages you wish to install can be installed with [`pip`](https://pip.pypa.io/en/stable/):
+7. Any other packages you wish to install can be installed with [`pip`](https://pip.pypa.io/en/stable/):
    ```bash
    pip install some-package
    ```
