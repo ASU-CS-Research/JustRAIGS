@@ -6,7 +6,7 @@ from wandb.integration.keras import WandbCallback
 import wandb as wab
 import wandb.util
 from wandb.sdk.wandb_config import Config
-from src.hypermodels.hypermodel import WaBHyperModel
+from src.hypermodels.hypermodels import WaBHyperModel
 from src.utils.datasets import load_datasets
 
 
@@ -40,6 +40,18 @@ def main():
             'value': 10,
             # 'values': [10, 20, 30]
         },
+        'conv_layer_activation_function': {
+            'value': 'tanh'
+        },
+        'kernel_size': {
+            'value': 11,
+        },
+        'num_nodes_conv_1': {
+            'value': 2**3
+        },
+        'num_nodes_conv_2': {
+            'value': 2**0
+        },
         'optimizer': {
             'parameters': {
                 'type': {
@@ -51,6 +63,9 @@ def main():
                     # 'values': [0.001, 0.01, 0.1]
                 }
             }
+        },
+        'inference_target_conv_layer_name': {
+            'values': ['conv_2d_2']
         }
     }
     sweep_configuration = {
@@ -73,13 +88,26 @@ def main():
     '''
     train_ds, val_ds, test_ds = load_datasets(
         color_mode='rgb', target_size=(64, 64), interpolation='bilinear', keep_aspect_ratio=False,
-        train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
+        train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=1, batch_size=BATCH_SIZE,
+        num_images=50
     )
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep: 
     '''
     # Construct WaB HyperModel:
-    hypermodel = WaBHyperModel()
+    hypermodel = WaBHyperModel(
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        num_classes=NUM_CLASSES,
+        training=True,
+        batch_size=BATCH_SIZE,
+        metrics=[
+            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+            tf.keras.metrics.FalseNegatives()
+        ]
+    )
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
@@ -93,7 +121,7 @@ if __name__ == '__main__':
     sweep configuration.
     """
     NUM_TRIALS = 10
-    BATCH_SIZE = 25
+    BATCH_SIZE = 10
     NUM_CLASSES = 2
     SEED = 42
     REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
@@ -108,6 +136,5 @@ if __name__ == '__main__':
     logger.debug(f"WANDB_DIR: {LOG_DIR}")
     logger.debug(f"LOCAL_DATA_DIR: {LOCAL_DATA_DIR}")
     logger.debug(f"DATA_DIR: {DATA_DIR}")
-
-
     tf.random.set_seed(seed=SEED)
+    main()

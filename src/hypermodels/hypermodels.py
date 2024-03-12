@@ -11,7 +11,7 @@ from tensorflow.data import Dataset
 from tensorflow.keras.losses import Loss
 from tensorflow.keras.applications.vgg19 import VGG19
 from tensorflow.keras import optimizers
-from tensorflow.keras.optimizers import Optimizer
+from tensorflow.keras.optimizers import Optimizer, Adam
 from tensorflow.python.eager import context
 from keras.engine import base_layer, data_adapter, training_utils
 from keras.utils import version_utils, tf_utils, io_utils
@@ -20,6 +20,7 @@ from wandb.integration.keras import WandbCallback
 from wandb.sdk.wandb_run import Run
 import wandb as wab
 import sys
+from contextlib import redirect_stdout
 from src.models.models import WaBModel
 
 
@@ -61,6 +62,9 @@ class WaBHyperModel:
             logger.debug(f"val_ds.element_spec: {val_ds.element_spec}")
         self._test_ds = test_ds
         logger.debug(f"test_ds.element_spec: {test_ds.element_spec}")
+        # Note: It is assumed here that train, val, and test images are all the same shape:
+        self._image_shape_with_batch_dim = tuple(train_ds.element_spec[0].shape)
+        self._image_shape_no_batch_dim = self._image_shape_with_batch_dim[1:]
         self._num_classes = num_classes
         self._training = training
         self._batch_size = batch_size
@@ -96,18 +100,13 @@ class WaBHyperModel:
         # Wandb agent will override the defaults with the sweep configuration subset it has selected according to the
         # specified 'method' in the config:
         logger.info(f"wandb.config: {wab.config}")
-        model = WabModel(
-            wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape,
-            name='piping_detector'
+        # The sweep configuration for this particular trial will then be provided to the Model for hyperparameter
+        # parsing to ensure the hyperparameters specified are leveraged by the model (i.e. adherence is delegated):
+        model = WaBModel(
+            wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape_no_batch_dim,
+            batch_size=self._batch_size,
+            name='WaBModel'
         )
-        # model = SummationModel(
-        #     wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape,
-        #     name='summation_model'
-        # )
-        # model = MeanModel(
-        #     wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape,
-        #     name='mean_model'
-        # )
         optimizer_config = wab.config['optimizer']
         optimizer_type = optimizer_config['type']
         optimizer_learning_rate = optimizer_config['learning_rate']
@@ -118,11 +117,11 @@ class WaBHyperModel:
                          f"sweep configuration.")
             exit(1)
         # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
-        model.build(input_shape=(self._batch_size, *self._image_shape))
+        model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
         # compile the model:
         model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=self._metrics)
         # .. todo: Should hparams be part of build or constructor?
-        # model = model.build(input_shape=self._image_shape, trial_hyperparameters=wab.config)
+        # model = model.build(input_shape=self._image_shape_no_batch_dim, trial_hyperparameters=wab.config)
         # Log the model summary to weights and biases console out:
         wab_trial_run.log({"model_summary": model.summary()})
         # Log the model summary to a text file and upload it as an artifact to weights and biases:
@@ -136,22 +135,16 @@ class WaBHyperModel:
             # Standard training loop:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
-                val_ds=self._val_ds,
+                val_ds=self._val_ds, test_ds=self._test_ds,
                 num_epochs=wab.config['num_epochs'],
-                resampled_train_steps_per_epoch=self._resampled_train_steps_per_epoch,
-                resampled_val_steps_per_epoch=self._resampled_val_steps_per_epoch,
-                validation_batch_size=self._batch_size,
                 inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
-                train_ds=self._train_ds, val_ds=self._test_ds,
+                train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
                 num_epochs=wab.config['num_epochs'],
-                resampled_train_steps_per_epoch=self._resampled_train_steps_per_epoch,
-                resampled_val_steps_per_epoch=self._resampled_val_steps_per_epoch,
-                validation_batch_size=self._batch_size,
                 inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
             )
         wab_trial_run.finish()
@@ -163,7 +156,10 @@ class WaBHyperModel:
             test_ds: Dataset, num_epochs: int, inference_target_conv_layer_name: str) -> History:
         """
         Runs an individual trial (i.e. a unique set of hyperparameters) for the model as part of an overarching sweep.
-        This method is responsible for training (i.e. fitting) the model, and maintaining a :class:`
+        This method is responsible for training (i.e. fitting) the model, and maintaining a :class:`keras.callbacks.History`
+        object to upload to WaB.
+
+        model (Model):
         """
         # Fit the model:
         # .. todo:: Early stopping callbacks?
@@ -179,6 +175,10 @@ class WaBHyperModel:
             # log_evaluation=True
         )
         # .. todo:: Declare custom callbacks here (such as GradCAM a nd ConfusionMatrices) see sweeper_old.py
+        trial_history = model.fit(
+            train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback]
+        )
+        return trial_history
 
 
 def exc_handler(exc_type, exc, tb):

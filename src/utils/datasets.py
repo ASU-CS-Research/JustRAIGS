@@ -46,8 +46,8 @@ def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
 
 def load_datasets(
         color_mode: str, target_size: Optional[Tuple[int, int]], interpolation: str, keep_aspect_ratio: bool,
-        train_set_size: Optional[float] = 0.6, val_set_size: Optional[float] = 0.2,
-        test_set_size: Optional[float] = 0.2, seed: Optional[int] = 42, ) -> [Dataset, Dataset, Dataset]:
+        num_partitions: int, batch_size: int, num_images: Optional[int] = None, train_set_size: Optional[float] = 0.6,
+        val_set_size: Optional[float] = 0.2, test_set_size: Optional[float] = 0.2, seed: Optional[int] = 42) -> [Dataset, Dataset, Dataset]:
     """
     Constructs TensorFlow train, val, test :class:`tensorflow.data.Dataset` s from the provided high resolution image
     training set.
@@ -62,7 +62,16 @@ def load_datasets(
           also supported. By default, "nearest" is used.
         keep_aspect_ratio (bool): Boolean, whether to resize images to a target size without aspect ratio distortion.
           The image is cropped in the center with target aspect ratio before resizing.
-        train_set_size (Optional[float]): The percentage of the data to use as the training dataset. This value defualts
+        num_partitions (int): An integer value representing the number of partitioned training sets to load in. The
+          maximum value is ``6`` (Train_0 - Train_5), the minimum value is ``1`` (Train_0 only).
+        batch_size (int): The batch size to use for the training, validation, and testing datasets.
+        num_images (Optional[int]): The exact number of images to load from the training set. This value takes
+          precedence over the specified number of partitions. However, if both ``num_partitions`` and ``num_images`` are
+          specified then at most ``num_images`` will be loaded from the subset of partitions specified by
+          ``num_partitions``, in other words the other partitions beyond the provided number will be untouched for
+          data loading. This value is mostly useful for debugging downstream pipelines, and it defaults to ``None``
+          indicating that all images in the partitions specified by ``num_partitions`` will be loaded.
+        train_set_size (Optional[float]): The percentage of the data to use as the training dataset. This value defaults
           to ``60%``.
         val_set_size (Optional[float]): The percentage of the data to use as the validation dataset. This value defaults
           to ``20%``.
@@ -81,7 +90,8 @@ def load_datasets(
     train_data_labels_df = pd.read_csv(filepath_or_buffer=train_data_labels_csv_path, delimiter=';')
     train_image_abs_file_paths = []
     image_paths_df = pd.DataFrame()
-    num_partitions = 6
+    assert num_partitions <= 6, f"num_partitions must be less than or equal to 6, got {num_partitions}"
+    assert num_partitions > 0, f"num_partitions must be greater than 0, got {num_partitions}"
     for i in range(num_partitions):
         train_set_partition_abs_path = os.path.join(high_res_train_data_path, f"{i}")
         for root, dirs, files in os.walk(train_set_partition_abs_path):
@@ -94,9 +104,9 @@ def load_datasets(
                         'Eye ID': file.split('.')[0]
                     }, ignore_index=True
                 )
-                # .. Note:: for debugging purposes
-                # if file_id == 10:
-                #     break
+                if num_images is not None:
+                    if file_id == num_images:
+                        break
     # Modify the DataFrame to contain the absolute path to the 'Eye ID' training image:
     train_data_labels_df = train_data_labels_df.merge(image_paths_df, on=['Eye ID'], how='outer')
     del image_paths_df
@@ -147,11 +157,26 @@ def load_datasets(
     test_ds = tf.data.Dataset.from_tensor_slices(
         (list(test_img_and_labels_df['NpImage']), list(test_img_and_labels_df['LabelTensor']))
     )
+    '''
+    Batch the datasets:
+    '''
+    # Note: Consider enabling operation determinism if you need to debug something difficult, but this will slow
+    # everything down drastically.
+    train_ds = train_ds.batch(
+        batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
+    )
+    val_ds = val_ds.batch(
+        batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
+    )
+    test_ds = test_ds.batch(
+        batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
+    )
     return train_ds, val_ds, test_ds
 
 
 if __name__ == '__main__':
+    # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(64, 64), interpolation='nearest', keep_aspect_ratio=False, train_set_size=0.6,
-        val_set_size=0.2, test_set_size=0.2, seed=42
+        color_mode='rgb', target_size=(64, 64), interpolation='nearest', keep_aspect_ratio=False, num_partitions=6,
+        batch_size=32, num_images=None, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
     )
