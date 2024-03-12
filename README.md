@@ -67,7 +67,9 @@ would include the parameters you were going to run.
    1. Files in this directory are partitioned by the original dataset splits provided by the challenge organizers. For
       example, the training data is stored in `/usr/local/data/JustRAIGS/raw/train/0` corresponds to the compressed 
       file: `JustRAIGS_Train_0.zip` provided directly from the challenge Zenodo website.
-4. I have provided a utility method :meth`src.data. 
+4. I have provided a utility method :meth:`src.utils.datasets.load_datasets` which will load the training datasets from 
+   the disk, perform preprocessing, rescaling, normalization, and convert the result into TensorFlow Datasets for use 
+   downstream.
 
 ## Introduction to Weights and Biases (WaB):
 1. Weights and Biases (WaB) is a tool that allows us to track and visualize our experiments. It is a great tool for 
@@ -76,8 +78,10 @@ would include the parameters you were going to run.
    2. You can also integrate WaB with other deep learning frameworks and libraries. For instance, you could use 
       KerasTuner with WaB instead of the native WaB hyperparameter tuning framework. 
    3. For more information check out: https://docs.wandb.ai/guides
-2. I have created a WaB project for us to use, which is located at: [WaB](https://wandb.ai/appmais/JustRAIGS).
-3. There is some high level terminology you should know which will allow you to utilize WaB effectively:
+2. I have created a WaB project for us to use, which is located at: [WaB: JustRAIGS](https://wandb.ai/appmais/JustRAIGS).
+3. I have also provided comments in Restructured Text (RST) format in the codebase to help you understand how to 
+   integrate WaB with your code, and which documentation to reference when you get stuck.
+4. There is some high level terminology you should know which will allow you to utilize WaB effectively:
    1. `Organization`: This is a collection of `Projects`. It is a way to organize separate distinct `Projects` within a
        particular organization/research group.
    2. `Project`: This is the highest level of organization in WaB. It is a collection of `Runs` and `Reports`.
@@ -104,7 +108,22 @@ would include the parameters you were going to run.
        `Model` for each `Trial` in the `Sweep`.
 
 ## A Walkthrough of the Code Provided:
-1. In the `src` directory, you will find the following relevant subdirectories:
+1. In the `docs` directory, you will find the source files needed to build [Sphinx](https://www.sphinx-doc.org/en/master/)
+   documentation. [Sphinx](https://www.sphinx-doc.org/en/master/) is a static website generator that parses Python 
+   docstrings into HTML documentation. This is the tool leveraged by the [official Python documentation](https://docs.python.org/3/) 
+   so it is worth your while to be somewhat familiar with it. Sphinx operates on docstrings written in [Restructured Text
+   (RST)](https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html) form. Restructured Text is a superset
+   of [Markdown](https://www.markdownguide.org/). Since RST can be ugly to look at, I write docstrings in the 
+   [Google Documentation Style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings), and use 
+   the [`sphinx.ext.napoleon`](https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html) extension to
+   parse it into RST, which Sphinx then utilizes to generate pretty looking HTML documentation. You will most likely not
+   need to know how this works. Just know that if you write good docstrings in the Google Style 
+   [(use this example for reference)](https://www.sphinx-doc.org/en/master/usage/extensions/example_google.html#example-google)
+   , Sphinx will be able to generate readable documentation for you (almost) automagically.
+   1. If you use PyCharm (which you should) for Python development, then PyCharm can build the Sphinx documentation for 
+      you. Additionally, you can configure PyCharm to lint your docstrings in Google Style. Ask me if you want to know
+      how to do this.
+2. In the `src` directory, you will find the following relevant subdirectories:
    1. `sweepers`: This is the main entry point for the program. The :mod:`src.sweepers.sweeper` module is the file you 
       should modify to either change the hyperparameters that are experimented with, or to change the method of the 
       hyperparameter search itself (i.e. random search, grid search, hyperband, etc.). Note that if you do change the 
@@ -131,7 +150,7 @@ would include the parameters you were going to run.
       custom layers in TensorFlow 2.0. This is not used in the current codebase, but is provided as a reference in case
       you wish to use custom layers in your model. Note that using a custom layer will result in a custom module, which
       will require you to modify the serialization an deserialization methods in the :class:`src.models.WaBModel` class.
-2. Less-relevant subdirectories:
+3. Less-relevant subdirectories:
    1. `tuners`: This directory houses the :mod:`src.tuners.wab_kt_tuner` module which provides an example of how to 
       integrate WaB with Kerastuner. This is not used in the current codebase, but is provided as a reference in case
       you wish to leverage KerasTuner for hyperparameter tuning directly, instead of WaB. This class uses KerasTuner
