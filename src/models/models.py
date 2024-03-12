@@ -137,8 +137,11 @@ class WaBModel(Sequential):
         saved_model_path = args[0]
         # saved_model_path = saved_model_path.replace('.h5', '.keras')
         overwrite = kwargs['overwrite']
-        # if 'save_format' in kwargs:
-        #     kwargs['save_format'] = 'keras'
+        if 'save_format' in kwargs:
+            save_format = kwargs['save_format']
+        else:
+            # When save_model is called with no save_format kwarg for the .h5 format:
+            save_format = 'h5'
         if os.path.isfile(saved_model_path):
             if overwrite:
                 super().save(saved_model_path, **kwargs)
@@ -146,11 +149,17 @@ class WaBModel(Sequential):
         else:
             super().save(saved_model_path, **kwargs)
             logger.debug(f"Saved model to: {saved_model_path}")
-        # Load in saved model and run assertions:
-        logger.debug(f"Loading saved model for weight assertion check...")
-        loaded_model = tf.keras.models.load_model(
-            args[0], custom_objects={"WaBModel": WaBModel}
-        )
-        # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
-        error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
-        np.testing.assert_equal(self.get_weights(), loaded_model.get_weights()), error_message
+        if save_format == 'h5':
+            # Load in saved model and run assertions:
+            logger.debug(f"Loading saved model for weight assertion check...")
+            loaded_model = tf.keras.models.load_model(
+                args[0], custom_objects={"WaBModel": WaBModel}
+            )
+            # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
+            error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
+            np.testing.assert_equal(self.get_weights(), loaded_model.get_weights()), error_message
+        elif save_format == 'tf':
+            logger.warning(f"TensorFlow model format (.tf) save-and-restore logic is not yet working. Anticipate an "
+                           f"un-deserializable model.")
+        else:
+            logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")

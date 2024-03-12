@@ -120,9 +120,12 @@ def load_datasets(
         train_data_labels_df, train_size=train_set_size, test_size=val_set_size + test_set_size,
         shuffle=True, random_state=seed
     )
+    logger.debug(f"train_ds_df.shape: {train_ds_df.shape}")
     val_ds_df, test_ds_df = train_test_split(
         val_ds_df, train_size=val_set_size, test_size=test_set_size, shuffle=False
     )
+    logger.debug(f"val_ds_df.shape: {val_ds_df.shape}")
+    logger.debug(f"test_ds_df.shape: {test_ds_df.shape}")
     '''
     At this point we have the dataframes partitioned into train, validation, and testing sets.
     Now we need to convert them to TensorFlow Datasets:
@@ -137,6 +140,8 @@ def load_datasets(
     train_ds = tf.data.Dataset.from_tensor_slices(
         (list(train_img_and_labels_df['NpImage']), list(train_img_and_labels_df['LabelTensor']))
     )
+    del train_ds_df
+    del train_img_and_labels_df
     val_img_and_labels_df = val_ds_df[['AbsPath', 'Final Label Int']].apply(
         load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
             ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
@@ -147,6 +152,8 @@ def load_datasets(
     val_ds = tf.data.Dataset.from_tensor_slices(
         (list(val_img_and_labels_df['NpImage']), list(val_img_and_labels_df['LabelTensor']))
     )
+    del val_ds_df
+    del val_img_and_labels_df
     test_img_and_labels_df = test_ds_df[['AbsPath', 'Final Label Int']].apply(
         load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
             ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
@@ -157,6 +164,8 @@ def load_datasets(
     test_ds = tf.data.Dataset.from_tensor_slices(
         (list(test_img_and_labels_df['NpImage']), list(test_img_and_labels_df['LabelTensor']))
     )
+    del test_ds_df
+    del test_img_and_labels_df
     '''
     Batch the datasets:
     '''

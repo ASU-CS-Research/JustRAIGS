@@ -88,7 +88,7 @@ def main():
     '''
     train_ds, val_ds, test_ds = load_datasets(
         color_mode='rgb', target_size=(64, 64), interpolation='bilinear', keep_aspect_ratio=False,
-        train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=1, batch_size=BATCH_SIZE,
+        train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
         num_images=50
     )
     '''
