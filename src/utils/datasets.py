@@ -10,34 +10,6 @@ import pandas as pd
 from loguru import logger
 
 
-def preprocess_image_at_path(*args, **kwargs) -> Tuple[tf.Tensor, tf.Tensor]:
-    """
-    Helper method intended to be mapped over an existing :class:`tf.data.Dataset` object which contains only image file
-    paths.
-
-    .. todo:: Add preprocessing logic here. Convert to grayscale, downsample, etc.
-
-    Args:
-        *args: Variable length argument list. The inputs depend on the :class:`pd.DataFrame` object (or
-          :class:`pd.Series`) that the :meth:`pd.DataFrame.apply` method is called on.
-        **kwargs: Arbitrary keyword arguments. The inputs depend on the :class:`pd.DataFrame` object (or
-          :class:`pd.Series`) that the :meth:`pd.DataFrame.apply` method is called on.
-
-    Returns:
-        Tuple[tf.Tensor, tf.Tensor]: A tuple containing the image and its corresponding label.
-
-    See Also:
-        - https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.apply.html#pandas.DataFrame.apply
-
-    """
-    image_abs_path = args[0][0]
-    image_int_label = args[0][1]
-    image = tf.io.read_file(image_abs_path, name=image_int_label)
-    label = tf.convert_to_tensor(image_int_label, dtype=tf.int32)
-    # .. todo:: Preprocessing logic goes here. Convert to grayscale, downsample, etc.
-    return image, label
-
-
 def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
     """
     Loads an image into a :class:`np.ndarray` preprocess it, return the label as an int.

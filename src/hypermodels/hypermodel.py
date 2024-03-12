@@ -1,7 +1,9 @@
 import copy
-from typing import Tuple, Union, List, Optional
+import traceback
+from typing import Tuple, Union, List, Optional, Dict, Any
 import tensorflow as tf
 import keras_tuner as kt
+from keras.callbacks import History
 from loguru import logger
 from tensorflow.keras.metrics import Metric
 from tensorflow.keras import Model
@@ -14,7 +16,179 @@ from tensorflow.python.eager import context
 from keras.engine import base_layer, data_adapter, training_utils
 from keras.utils import version_utils, tf_utils, io_utils
 from keras import callbacks as callbacks_module
+from wandb.integration.keras import WandbCallback
 from wandb.sdk.wandb_run import Run
+import wandb as wab
+import sys
+from src.models.models import WaBModel
+
+
+class WaBHyperModel:
+    """
+    This is an example Weights and Biases Hypermodel without KerasTuner integration (i.e. WaB will handle hyperparameter
+    tuning instead of keras). The hypermodel is the class which is in charge of repeatedly instantiating WaB trials.
+    Each trial is a unique set of hyperparameters defined in the sweep configuration. The hypermodel is also responsible
+    for training the model specified by the trial, and logging the results to WaB.
+
+    See Also::
+        -
+    """
+    def __init__(
+            self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
+            batch_size: int, metrics: List[Metric], wab_config_defaults: Optional[Dict[str, Any]] = None):
+        """
+
+        Args:
+            train_ds (Dataset): The training dataset. If the training flag is set to ``False`` this is expected to be
+              the training + validation datasets combined. Otherwise, this is the normal training dataset.
+            val_ds (Optional[Dataset]): The validation dataset. If the training flag is set to ``False`` this is
+              expected to be ``None`` (as the training and validation datasets will have been combined). Otherwise, this
+              is the normal training set.
+            test_ds (Dataset): The testing dataset. This dataset will not be used if the training flag is set to
+              ``True``. If the training flag is set to ``False`` then this dataset will be used to evaluate the model.
+            num_classes (int): The number of classes in the classification problem, determines if a sigmoid or softmax
+              unit is leveraged on the final output layer.
+            training (bool): A boolean flag indicating if the model is being trained or evaluated (i.e. inference mode).
+            batch_size (int): The batch size for the ?? dataset.
+            metrics (List[Metric]): A list of metrics to be used to evaluate the model.
+            wab_config_defaults (Optional[Dict[str, Any]]): A dictionary containing the default configuration for the
+              Weights and Biases sweep configuration object.
+        """
+        self._train_ds = train_ds
+        logger.debug(f"train_ds.element_spec: {train_ds.element_spec}")
+        self._val_ds = val_ds
+        if val_ds is not None:
+            logger.debug(f"val_ds.element_spec: {val_ds.element_spec}")
+        self._test_ds = test_ds
+        logger.debug(f"test_ds.element_spec: {test_ds.element_spec}")
+        self._num_classes = num_classes
+        self._training = training
+        self._batch_size = batch_size
+        self._metrics = metrics
+        self._wab_config_defaults = wab_config_defaults
+        logger.info(f"wab_sweep_config_defaults: {self._wab_config_defaults}")
+        # Set default hyperparameter config values that remain fixed:
+        # if self._wab_config_defaults is None:
+        #     self._wab_config_defaults = {
+        #         'image_size': (112, 112),
+        #         'batch_size': 32
+        #     }
+        # logger.info(f"wab_sweep_config_defaults (post-init): {self._wab_config_defaults}")
+        # Group name for the Weights and Biases sweep:
+        self._wab_group_name = f"{wab.util.generate_id()}"
+
+    def construct_model_run_trial(self):
+        """
+        This method is invoked REPEATEDLY by the WaB agent for each trial (unique set of hyperparameters). This method
+        must instantiate a new model that utilizes the set of hyperparameters specified by the trial. Then this method
+        must train the instantiated model, and log the results to WaB. Recall that each trial is a unique set of
+        hyperparameters specified by the WaB sweep configuration.
+
+        See Also:
+
+        """
+        # Initialize the namespace/container for this particular trial run with WandB:
+        wab_trial_run = wab.init(
+            project='JustRAIGS', entity='appmais', config=wab.config, group=self._wab_group_name
+        )
+        # Workaround for exception logging:
+        sys.excepthook = exc_handler
+        # Wandb agent will override the defaults with the sweep configuration subset it has selected according to the
+        # specified 'method' in the config:
+        logger.info(f"wandb.config: {wab.config}")
+        model = WabModel(
+            wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape,
+            name='piping_detector'
+        )
+        # model = SummationModel(
+        #     wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape,
+        #     name='summation_model'
+        # )
+        # model = MeanModel(
+        #     wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape,
+        #     name='mean_model'
+        # )
+        optimizer_config = wab.config['optimizer']
+        optimizer_type = optimizer_config['type']
+        optimizer_learning_rate = optimizer_config['learning_rate']
+        if optimizer_type == 'adam':
+            optimizer = Adam(learning_rate=optimizer_learning_rate)
+        else:
+            logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
+                         f"sweep configuration.")
+            exit(1)
+        # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
+        model.build(input_shape=(self._batch_size, *self._image_shape))
+        # compile the model:
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=self._metrics)
+        # .. todo: Should hparams be part of build or constructor?
+        # model = model.build(input_shape=self._image_shape, trial_hyperparameters=wab.config)
+        # Log the model summary to weights and biases console out:
+        wab_trial_run.log({"model_summary": model.summary()})
+        # Log the model summary to a text file and upload it as an artifact to weights and biases:
+        with open("model_summary.txt", "w") as fp:
+            with redirect_stdout(fp):
+                model.summary()
+        model_summary_artifact = wab.Artifact("model_summary", type='model_summary')
+        model_summary_artifact.add_file("model_summary.txt")
+        wab_trial_run.log_artifact(model_summary_artifact)
+        if self._training:
+            # Standard training loop:
+            self.run_trial(
+                model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
+                val_ds=self._val_ds,
+                num_epochs=wab.config['num_epochs'],
+                resampled_train_steps_per_epoch=self._resampled_train_steps_per_epoch,
+                resampled_val_steps_per_epoch=self._resampled_val_steps_per_epoch,
+                validation_batch_size=self._batch_size,
+                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+            )
+        else:
+            # Support for final training run performed after model selection process:
+            self.run_trial(
+                model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
+                train_ds=self._train_ds, val_ds=self._test_ds,
+                num_epochs=wab.config['num_epochs'],
+                resampled_train_steps_per_epoch=self._resampled_train_steps_per_epoch,
+                resampled_val_steps_per_epoch=self._resampled_val_steps_per_epoch,
+                validation_batch_size=self._batch_size,
+                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+            )
+        wab_trial_run.finish()
+        tf.keras.backend.clear_session()
+
+    @staticmethod
+    def run_trial(
+            model: Model, num_classes: int, wab_trial_run: Run, train_ds: Dataset, val_ds: Optional[Dataset],
+            test_ds: Dataset, num_epochs: int, inference_target_conv_layer_name: str) -> History:
+        """
+        Runs an individual trial (i.e. a unique set of hyperparameters) for the model as part of an overarching sweep.
+        This method is responsible for training (i.e. fitting) the model, and maintaining a :class:`
+        """
+        # Fit the model:
+        # .. todo:: Early stopping callbacks?
+        wab_callback = WandbCallback(
+            monitor='val_loss',
+            verbose=1,
+            save_model=True,
+            save_graph=True,
+            # generator=val_ds,
+            # validation_steps=resampled_val_steps_per_epoch,
+            # input_type='image',
+            # output_type='label',
+            # log_evaluation=True
+        )
+        # .. todo:: Declare custom callbacks here (such as GradCAM a nd ConfusionMatrices) see sweeper_old.py
+
+
+def exc_handler(exc_type, exc, tb):
+    """
+    This is a workaround for WaB not logging exceptions properly. This function is intended to be used as the exception
+    handler. This method may not be necessary in the future if WaB fixes its stack trace logging.
+    """
+    logger.exception(f"EXCEPTION")
+    print("EXCEPTION")
+    traceback.print_exception(exc_type, exc, tb)
 
 
 class KerasTunerWaBHyperModel(kt.HyperModel):

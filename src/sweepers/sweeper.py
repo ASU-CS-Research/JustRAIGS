@@ -6,13 +6,35 @@ from wandb.integration.keras import WandbCallback
 import wandb as wab
 import wandb.util
 from wandb.sdk.wandb_config import Config
-
-from src.hypermodels.hypermodel import HyperModel
+from src.hypermodels.hypermodel import WaBHyperModel
 from src.utils.datasets import load_datasets
 
+
 def main():
+    """
+    Main driver for the hyperparameter search. This function is responsible for initializing the sweep configuration,
+    initializing the datasets, initializing the agent managing the sweep, and constructing the WaB HyperModel that the
+    sweeps will leverage.
+
+    Notes::
+        - The sweep configuration specifies the hyperparameters to be varied, the hyperparameter search method, the loss
+          function to optimize, and the WaB project and entity to log the results to.
+        - An individual trial is a specific combination of hyperparameters to be evaluated. The WaB agent is responsible
+          for running however many unique trials are necessary as part of the specified sweep.
+        - The WaB HyperModel is a single class responsible for constructing the model specified by the hyperparameters
+          specified in the sweep configuration, training the model, and logging the results to WaB. The WaB HyperModel
+          has a :meth:`WaBHyperModel.construct_model_run_trial` method that is called by the WaB agent for each trial
+          (unique set of hyperparameters). This method is in charge of constructing a new model that utilizes the
+          provided set of hyperparameters.
+
+    See Also::
+        - To learn more about sweeps for hyperparameter searches in WaB checkout: https://docs.wandb.ai/guides/sweeps
+        - To learn more about how to configure the sweep, checkout: https://docs.wandb.ai/guides/sweeps/configuration
+
+    """
     # Note: Do not use the keras object for the optimizer (e.g. Adam(learning_rate=0.001) instead of 'adam')
-    # or you get a RuntimeError('Should only create a single instance of _DefaultDistributionStrategy.')
+    # or you get a RuntimeError('Should only create a single instance of _DefaultDistributionStrategy.') this may be a
+    # WaB bug which will be addressed in future updates.
     hyperparameters = {
         'num_epochs': {
             'value': 10,
@@ -53,13 +75,15 @@ def main():
         color_mode='rgb', target_size=(64, 64), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
     )
-    # Construct KerasTuner HyperModel:
-    hypermodel = HyperModel()
+    '''
+    Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep: 
+    '''
+    # Construct WaB HyperModel:
+    hypermodel = WaBHyperModel()
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
     )
-
 
 
 if __name__ == '__main__':
