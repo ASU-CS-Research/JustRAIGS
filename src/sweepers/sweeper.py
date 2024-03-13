@@ -16,6 +16,8 @@ def main():
     initializing the datasets, initializing the agent managing the sweep, and constructing the WaB HyperModel that the
     sweeps will leverage.
 
+    .. todo:: Add an example for leveraging Custom Metrics with WaB.
+
     Notes:
         - The sweep configuration specifies the hyperparameters to be varied, the hyperparameter search method, the loss
           function to optimize, and the WaB project and entity to log the results to.
@@ -116,7 +118,7 @@ def main():
 
 if __name__ == '__main__':
     """
-    Main entry point for the sweeper. This script is used to run the hyperparameter search. Define the hyperparameteres
+    Main entry point for the sweeper. This script is used to run the hyperparameter search. Define the hyperparameters
     which will remain constant between runs below. The hyperparameters which will be varied should be defined in the
     sweep configuration.
     """
