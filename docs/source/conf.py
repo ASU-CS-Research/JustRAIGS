@@ -66,7 +66,8 @@ master_doc = 'index'
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    "tensorflow": ("https://www.tensorflow.org/api_docs/python", "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tf2_py_objects.inv")
+    'tensorflow': ("https://www.tensorflow.org/api_docs/python", "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tf2_py_objects.inv"),
+    'pandas': ('https://pandas.pydata.org/docs/objects.inv', None)
 }
 
 # -- Options for todo extension ----------------------------------------------

@@ -16,18 +16,18 @@ def main():
     initializing the datasets, initializing the agent managing the sweep, and constructing the WaB HyperModel that the
     sweeps will leverage.
 
-    Notes::
+    Notes:
         - The sweep configuration specifies the hyperparameters to be varied, the hyperparameter search method, the loss
           function to optimize, and the WaB project and entity to log the results to.
         - An individual trial is a specific combination of hyperparameters to be evaluated. The WaB agent is responsible
           for running however many unique trials are necessary as part of the specified sweep.
         - The WaB HyperModel is a single class responsible for constructing the model specified by the hyperparameters
           specified in the sweep configuration, training the model, and logging the results to WaB. The WaB HyperModel
-          has a :meth:`WaBHyperModel.construct_model_run_trial` method that is called by the WaB agent for each trial
-          (unique set of hyperparameters). This method is in charge of constructing a new model that utilizes the
-          provided set of hyperparameters.
+          has a :meth:`~src.hypermodels.hypermodels.WaBHyperModel.construct_model_run_trial` method that is called by
+          the WaB agent for each trial (unique set of hyperparameters). This method is in charge of constructing a new
+          model that utilizes the provided set of hyperparameters.
 
-    See Also::
+    See Also:
         - To learn more about sweeps for hyperparameter searches in WaB checkout: https://docs.wandb.ai/guides/sweeps
         - To learn more about how to configure the sweep, checkout: https://docs.wandb.ai/guides/sweeps/configuration
 
