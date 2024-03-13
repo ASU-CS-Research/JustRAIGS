@@ -24,7 +24,8 @@ from src.piping_detection.metrics import BalancedBinaryAccuracy
 
 class WBTuner(kt.Tuner):
     """
-    Custom Weights & Biases Tuner subclassed from :class:`kt.Tuner`.
+    Custom Weights & Biases Tuner subclassed from :class:`kt.Tuner`. Integrates Keras Tuner with Weights and Biases for
+    versioning and result logging.
 
     See Also:
         https://wandb.ai/arig23498/keras-tuner/reports/Automate-Hyperparameter-Tuning-Using-Keras-Tuner-and-W-B--Vmlldzo0MzQ1NzU

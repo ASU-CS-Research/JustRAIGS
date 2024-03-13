@@ -16,6 +16,7 @@ import sys
 from contextlib import redirect_stdout
 from src.callbacks.custom import ConfusionMatrixCallback
 from src.models.models import WaBModel
+from tensorflow.keras.losses import BinaryCrossentropy
 
 
 class WaBHyperModel:
@@ -105,6 +106,7 @@ class WaBHyperModel:
             batch_size=self._batch_size,
             name='WaBModel'
         )
+        # Parse optimizer:
         optimizer_config = wab.config['optimizer']
         optimizer_type = optimizer_config['type']
         optimizer_learning_rate = optimizer_config['learning_rate']
@@ -114,10 +116,18 @@ class WaBHyperModel:
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
                          f"sweep configuration.")
             exit(1)
+        # Parse loss function:
+        loss_function = wab.config['loss']
+        if loss_function == 'binary_crossentropy':
+            loss = BinaryCrossentropy(from_logits=False)
+        else:
+            logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
+                         f"configuration.")
+            exit(1)
         # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
         model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
         # compile the model:
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=self._metrics)
+        model.compile(optimizer=optimizer, loss=loss, metrics=self._metrics)
         # .. todo: Should hparams be part of build or constructor?
         # model = model.build(input_shape=self._image_shape_no_batch_dim, trial_hyperparameters=wab.config)
         # Log the model summary to weights and biases console out:

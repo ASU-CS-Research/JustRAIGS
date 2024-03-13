@@ -23,11 +23,14 @@ import sys
 from contextlib import redirect_stdout
 
 
-class KerasTunerWaBHyperModel(kt.HyperModel):
+class KerasTunerWaBVGG19HyperModel(kt.HyperModel):
     """
-    This is the base class for all KerasTuner models that are compatible with Weights and Biases. This class is designed
-    to be subclassed by concrete models. This code was intended to run on the lambda machine compute server with a NFS
-    mount to the AppMAIS data storage server.
+    This is the base class for all [Keras Tuner](https://www.tensorflow.org/tutorials/keras/keras_tuner) models that are
+    compatible with Weights and Biases (WaB). This class is designed to be subclassed by concrete models. This code was
+    intended to run on the lambda machine compute server with a NFS mount to the AppMAIS data storage server. This class
+    provides an example of how to perform Transfer Learning in the WaB framework with Keras Tuner integration. As far as
+    I know, this is the easiest way to perform Transfer Learning and have the results logged to WaB. However, KerasTuner
+    will drive the hyperparameter search process here, not WaB.
 
     See Also:
         - :class:`FromScratchHyperModel`
@@ -59,14 +62,13 @@ class KerasTunerWaBHyperModel(kt.HyperModel):
         self.hyperparameters = hyperparameters
         self._resampled_steps_per_epoch = resampled_steps_per_epoch
         self._model = None
-        super().__init__(name='KerasTunerWaBHyperModel', tunable=True)
+        super().__init__(name='KerasTunerWaBVGG19HyperModel', tunable=True)
 
     def build(self, hp: kt.HyperParameters, weights: Optional[str] = 'imagenet', *args, **kwargs) -> Model:
         """
         This method setups up the hyperparameter grid and search space.
 
-        See Also:
-            https://huggingface.co/docs/huggingface_hub/main/en/package_reference/mixins#huggingface_hub.from_pretrained_keras
+
         """
         logger.info(f"Building hypermodel with hyperparameters: {hp.values}")
         input_layer = tf.keras.layers.Input(shape=self._vgg_19_input_image_shape)
@@ -321,10 +323,11 @@ class KerasTunerWaBHyperModel(kt.HyperModel):
         return self._optimizer
 
 
-class FromScratchHyperModel(KerasTunerWaBHyperModel):
+class FromScratchHyperModel(KerasTunerWaBVGG19HyperModel):
     """
     This is an example concrete subclass of a KerasTunerWaBHyperModel. By subclassing this hypermodel will be compatible
-    with both KerasTuner and Weights and Biases.
+    with both KerasTuner and Weights and Biases. This model trains from scratch and does not use transfer learning (i.e.
+    the weights from the parent class VGG19 model are not used).
     """
 
     def __init__(

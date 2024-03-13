@@ -42,6 +42,9 @@ def main():
             'value': 5,
             # 'values': [10, 20, 30]
         },
+        'loss': {
+            'value': 'binary_crossentropy'
+        },
         'conv_layer_activation_function': {
             'value': 'tanh'
         },
@@ -110,6 +113,8 @@ def main():
             tf.keras.metrics.FalseNegatives()
         ]
     )
+    # .. todo:: Construct InceptionV3 WaB Model:
+
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
