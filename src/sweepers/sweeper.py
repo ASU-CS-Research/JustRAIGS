@@ -37,7 +37,7 @@ def main():
     # WaB bug which will be addressed in future updates.
     hyperparameters = {
         'num_epochs': {
-            'value': 10,
+            'value': 5,
             # 'values': [10, 20, 30]
         },
         'conv_layer_activation_function': {

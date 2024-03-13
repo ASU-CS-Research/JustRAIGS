@@ -21,6 +21,8 @@ from wandb.sdk.wandb_run import Run
 import wandb as wab
 import sys
 from contextlib import redirect_stdout
+
+from src.callbacks.custom import ConfusionMatrixCallback
 from src.models.models import WaBModel
 
 
@@ -175,8 +177,12 @@ class WaBHyperModel:
             # log_evaluation=True
         )
         # .. todo:: Declare custom callbacks here (such as GradCAM a nd ConfusionMatrices) see sweeper_old.py
+        # Declare custom Callbacks here:
+        confusion_matrix_callback = ConfusionMatrixCallback(
+            num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=val_ds, validation_steps=None
+        )
         trial_history = model.fit(
-            train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback]
+            train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback, confusion_matrix_callback]
         )
         return trial_history
 
