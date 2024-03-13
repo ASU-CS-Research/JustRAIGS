@@ -9,7 +9,10 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../src'))
+from loguru import logger
+repo_root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+logger.debug(f"Repository Root Directory (for autodoc): {repo_root_dir}")
+sys.path.insert(0, repo_root_dir)
 import sphinx_rtd_theme
 
 # -- Project information -----------------------------------------------------

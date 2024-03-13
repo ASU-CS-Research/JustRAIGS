@@ -14,7 +14,6 @@ from wandb.sdk.wandb_run import Run
 import wandb as wab
 import sys
 from contextlib import redirect_stdout
-
 from src.callbacks.custom import ConfusionMatrixCallback
 from src.models.models import WaBModel
 
@@ -26,8 +25,10 @@ class WaBHyperModel:
     Each trial is a unique set of hyperparameters defined in the sweep configuration. The hypermodel is also responsible
     for training the model specified by the trial, and logging the results to WaB.
 
-    See Also::
-        -
+    See Also:
+        - https://docs.wandb.ai/guides/sweeps/hyperparameter-optimization
+        - https://docs.wandb.ai/guides/integrations/keras
+
     """
     def __init__(
             self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
@@ -84,6 +85,8 @@ class WaBHyperModel:
         hyperparameters specified by the WaB sweep configuration.
 
         See Also:
+            - https://docs.wandb.ai/guides/sweeps/hyperparameter-optimization
+            - https://docs.wandb.ai/guides/integrations/keras
 
         """
         # Initialize the namespace/container for this particular trial run with WandB:
@@ -154,7 +157,27 @@ class WaBHyperModel:
         This method is responsible for training (i.e. fitting) the model, and maintaining a :class:`keras.callbacks.History`
         object to upload to WaB.
 
-        model (Model):
+        .. todo:: Add keras early stopping callbacks.
+
+        Args:
+            model (:class:`tf.keras.Model`): The model to be trained with the hyperparameters specified by the trial.
+            num_classes (int): The number of classes in the classification problem, this information is needed by
+              several of the custom callbacks (such as the :class:`src.callbacks.custom.ConfusionMatrixCallback`).
+            wab_trial_run (:class:`wandb.sdk.wandb_run.Run`): The WandB Run object for the current trial.
+            train_ds (:class:`tf.data.Dataset`): The training dataset to which the provided :class:`tf.keras.Model` will
+              be fit to.
+            val_ds (:class:`tf.data.Dataset`): The validation dataset to which the provided :class:`tf.keras.Model` will
+              be evaluated against during training.
+            test_ds (:class:`tf.data.Dataset`): The testing dataset (currently not used, but requested for the sake of
+              consistency with other methods).
+            num_epochs (int): The number of epochs to train the provided :class:`tf.keras.Model` for during fitting.
+            inference_target_conv_layer_name (str): The name of the target convolutional layer to be used for
+              visualization purposes.
+
+        Returns:
+            :class:`keras.callbacks.History`: The history object containing the training and validation metrics for the
+            model during the training process.
+
         """
         # Fit the model:
         # .. todo:: Early stopping callbacks?

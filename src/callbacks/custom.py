@@ -14,9 +14,21 @@ import wandb as wab
 class ConfusionMatrixCallback(Callback):
     """
     Plots the confusion matrix on the validation dataset after training has finished and uploads the results to WandB.
+
+    Notes::
+      This class assumes that the validation dataset is a TensorFlow :class:`tf.data.Dataset` object that yields (x, y)
+      tuples of validation data. This Callback assumes a binary classification problem. If this is not the case, the
+      callback would need to be modified to handle the multi-class classification problem.
+
+    See Also:
+        - https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/Callback
+        - https://docs.wandb.ai/guides/integrations/keras
+
     """
 
-    def __init__(self, num_classes: int, wab_trial_run: Run, validation_data: Dataset, validation_steps: Optional[int] = None):
+    def __init__(
+            self, num_classes: int, wab_trial_run: Run, validation_data: Dataset,
+            validation_steps: Optional[int] = None):
         """
 
         Args:
@@ -36,6 +48,12 @@ class ConfusionMatrixCallback(Callback):
         super().__init__()
 
     def on_train_end(self, logs=None):
+        """
+        Called by the Keras framework at the end of Model training. This method is responsible for computing the
+        Confusion Matrix on the validation dataset provided during callback initialization, and uploading the results
+        to WaB.
+
+        """
         logger.debug(f"Generating confusion matrix for {self._num_classes} classes on the validation dataset...")
         # Check to see if the provided validation dataset is infinite:
         if self._validation_data.cardinality().numpy() == tf.data.INFINITE_CARDINALITY:

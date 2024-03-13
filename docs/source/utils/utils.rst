@@ -2,9 +2,9 @@
 Utilities
 ==============
 
-.. module:: src/utils
+.. module:: src.utils
 
-.. automodule:: utils
+.. automodule:: src.utils.datasets
     :members:
     :undoc-members:
     :show-inheritance:

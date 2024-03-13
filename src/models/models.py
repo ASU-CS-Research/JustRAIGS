@@ -11,9 +11,7 @@ from tensorflow.keras.models import Sequential
 @tf.keras.utils.register_keras_serializable(name='WaBModel')
 class WaBModel(Sequential):
     """
-    See sweeper_old.py PipingDetectorWabModel
-
-    This is an example WaB model that is instantiated repeatedly by the :class:`hypermodels.hypermodel.WaBHyperModel`.
+    This is an example WaB model that is instantiated repeatedly by the :class:`src.hypermodels.hypermodel.WaBHyperModel`.
     This class encapsulates model construction and save and restore logic, which is particularly useful when leveraging
     custom layers or metrics.
     """
@@ -21,20 +19,22 @@ class WaBModel(Sequential):
             self, wab_trial_run: Optional[Run], trial_hyperparameters: Config, batch_size: int,
             input_shape: Tuple[int, int, int], *args, **kwargs):
         """
-        wab_trial_run (Optional[Run]): The WaB run object that is responsible for logging the results of the current
-          trial. Used to log output to the same namespaced location in WaB. Note that this parameter is optional in the
-          event that the model is being loaded from a saved model format (e.g. h5) in which case the user may not wish
-          to log metrics to the same trial as the one that generated the saved model. During training it is expected
-          that this value is not ``None``.
-        trial_hyperparameters (Config): The hyperparameters for this particular trial. These are provided by the WaB
-          agent that is driving the sweep as a subset of the total hyperparameter search space.
-        batch_size (int): The batch size to use for the training model.
-        input_shape (Tuple[int, int, int]): The shape of the input tensor WITHOUT the batch dimension (that means no
-          leading batch dimension integer and no leading ``None`` placeholder Tensor).
-        *args: Variable length argument list to pass through to the :class:`keras.Model` superclass constructor.
-        **kwargs: Arbitrary keyword arguments to pass through to the :class:`keras.Model` superclass constructor.
 
-        Notes::
+        Args:
+            wab_trial_run (Optional[Run]): The WaB run object that is responsible for logging the results of the current
+              trial. Used to log output to the same namespaced location in WaB. Note that this parameter is optional in the
+              event that the model is being loaded from a saved model format (e.g. h5) in which case the user may not wish
+              to log metrics to the same trial as the one that generated the saved model. During training it is expected
+              that this value is not ``None``.
+            trial_hyperparameters (Config): The hyperparameters for this particular trial. These are provided by the WaB
+              agent that is driving the sweep as a subset of the total hyperparameter search space.
+            batch_size (int): The batch size to use for the training model.
+            input_shape (Tuple[int, int, int]): The shape of the input tensor WITHOUT the batch dimension (that means no
+              leading batch dimension integer and no leading ``None`` placeholder Tensor).
+            *args: Variable length argument list to pass through to the :class:`keras.Model` superclass constructor.
+            **kwargs: Arbitrary keyword arguments to pass through to the :class:`keras.Model` superclass constructor.
+
+        Notes:
             If you are wondering about the usage of the decorator on this class see: https://www.tensorflow.org/tutorials/keras/save_and_load#saving_custom_objects
 
         """
@@ -126,7 +126,8 @@ class WaBModel(Sequential):
 
     def save(self, *args, **kwargs):
         """
-        Saves the model to disk preserving the trained weights.
+        Saves the model to disk preserving the trained weights. Loads the saved model back into memory immediately to
+        ensure that the weights were saved and deserialized correctly.
 
         See Also:
             - https://www.tensorflow.org/guide/keras/serialization_and_saving

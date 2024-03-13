@@ -2,9 +2,9 @@
 Sweeper
 ===========
 
-.. module:: sweepers.sweeper
+.. module:: src.sweepers
 
-.. autoclass::
+.. automodule:: src.sweepers.sweeper
     :members:
     :private-members:
     :undoc-members:

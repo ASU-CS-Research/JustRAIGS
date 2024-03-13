@@ -9,6 +9,10 @@ Welcome to ASU: JustRAIGS's documentation!
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   callbacks/callbacks
+   hypermodels/hypermodels
+   models/models
    utils/utils
    sweepers/sweeper
 
