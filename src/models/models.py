@@ -12,6 +12,7 @@ from tensorflow.keras.layers import Flatten
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import BinaryCrossentropy
+import wandb as wab
 
 
 @tf.keras.utils.register_keras_serializable(name='WaBModel')
@@ -102,7 +103,7 @@ class WaBModel(Sequential):
         # .. todo:: Should the wab_trial_run object be serialized in the config?
         config = {
             'wab_trial_run': None, 'trial_hyperparameters': self._trial_hyperparameters.as_dict(),
-            'input_shape': self._input_shape_no_batch
+            'input_shape': self._input_shape_no_batch, 'batch_size': self._batch_size
         }
         return {**base_config, **config}
 
@@ -124,11 +125,15 @@ class WaBModel(Sequential):
         logger.debug(f"Deserializing from config: {config}")
         trial_hyperparameters_dict = config.pop('trial_hyperparameters')
         input_shape = config.pop('input_shape')
+        batch_size = config.pop('batch_size')
         layers = config.pop('layers')
         wab_trial_run = config.pop('wab_trial_run')
         trial_hyperparameters = Config()
         trial_hyperparameters.update(trial_hyperparameters_dict)
-        return cls(wab_trial_run=None, trial_hyperparameters=trial_hyperparameters, input_shape=input_shape, **config)
+        return cls(
+            wab_trial_run=None, trial_hyperparameters=trial_hyperparameters, input_shape=input_shape,
+            batch_size=batch_size, **config
+        )
 
     def save(self, *args, **kwargs):
         """
@@ -142,17 +147,15 @@ class WaBModel(Sequential):
         logger.debug(f"save method received args: {args}")
         logger.debug(f"save method received kwargs: {kwargs}")
         saved_model_path = args[0]
-        # saved_model_path = saved_model_path.replace('.h5', '.keras')
-        overwrite = kwargs['overwrite']
+        # saved_model_path = saved_model_path.replace('.h5', '.keras') overwrite = kwargs['overwrite']
         if 'save_format' in kwargs:
             save_format = kwargs['save_format']
         else:
             # When save_model is called with no save_format kwarg for the .h5 format:
             save_format = 'h5'
         if os.path.isfile(saved_model_path):
-            if overwrite:
-                super().save(saved_model_path, **kwargs)
-                logger.debug(f"Overwrote and saved model to: {saved_model_path}")
+            super().save(saved_model_path, **kwargs)
+            logger.debug(f"Overwrote and saved model to: {saved_model_path}")
         else:
             super().save(saved_model_path, **kwargs)
             logger.debug(f"Saved model to: {saved_model_path}")
@@ -162,9 +165,11 @@ class WaBModel(Sequential):
             loaded_model = tf.keras.models.load_model(
                 args[0], custom_objects={"WaBModel": WaBModel}
             )
-            # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
             error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
             np.testing.assert_equal(self.get_weights(), loaded_model.get_weights()), error_message
+            saved_model_artifact = wab.Artifact("saved_model.h5", "saved_model")
+            saved_model_artifact.add_file(saved_model_path)
+            self._wab_trial_run.log_artifact(saved_model_artifact)
         elif save_format == 'tf':
             logger.warning(f"TensorFlow model format (.tf) save-and-restore logic is not yet working. Anticipate an "
                            f"un-deserializable model.")
