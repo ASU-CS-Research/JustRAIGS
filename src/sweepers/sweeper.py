@@ -6,7 +6,7 @@ from wandb.integration.keras import WandbCallback
 import wandb as wab
 import wandb.util
 from wandb.sdk.wandb_config import Config
-from src.hypermodels.hypermodels import WaBHyperModel
+from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel
 from src.utils.datasets import load_datasets
 
 
@@ -71,6 +71,10 @@ def main():
         },
         'inference_target_conv_layer_name': {
             'values': ['conv_2d_2']
+        },
+        # For transfer learning:
+        'num_thawed_layers': {
+            'value': 2
         }
     }
     sweep_configuration = {
@@ -92,7 +96,7 @@ def main():
     Initialize TensorFlow datasets:
     '''
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(64, 64), interpolation='bilinear', keep_aspect_ratio=False,
+        color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
         num_images=50
     )
@@ -100,7 +104,21 @@ def main():
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep: 
     '''
     # Construct WaB HyperModel:
-    hypermodel = WaBHyperModel(
+    # hypermodel = WaBHyperModel(
+    #     train_ds=train_ds,
+    #     val_ds=val_ds,
+    #     test_ds=test_ds,
+    #     num_classes=NUM_CLASSES,
+    #     training=True,
+    #     batch_size=BATCH_SIZE,
+    #     metrics=[
+    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+    #         tf.keras.metrics.FalseNegatives()
+    #     ]
+    # )
+    # For Transfer Learning with InceptionV3:
+    hypermodel = InceptionV3WaBHyperModel(
         train_ds=train_ds,
         val_ds=val_ds,
         test_ds=test_ds,
@@ -113,8 +131,6 @@ def main():
             tf.keras.metrics.FalseNegatives()
         ]
     )
-    # .. todo:: Construct InceptionV3 WaB Model:
-
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial

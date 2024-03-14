@@ -15,7 +15,7 @@ import wandb as wab
 import sys
 from contextlib import redirect_stdout
 from src.callbacks.custom import ConfusionMatrixCallback
-from src.models.models import WaBModel
+from src.models.models import WaBModel, InceptionV3WaBModel
 from tensorflow.keras.losses import BinaryCrossentropy
 
 
@@ -211,6 +211,92 @@ class WaBHyperModel:
             train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback, confusion_matrix_callback]
         )
         return trial_history
+
+
+class InceptionV3WaBHyperModel(WaBHyperModel):
+
+    def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
+                 batch_size: int, metrics: List[Metric]):
+        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics)
+
+    def construct_model_run_trial(self):
+        """
+        This method is invoked REPEATEDLY by the WaB agent for each trial (unique set of hyperparameters). This method
+        must instantiate a new model that utilizes the set of hyperparameters specified by the trial. Then this method
+        must train the instantiated model, and log the results to WaB. Recall that each trial is a unique set of
+        hyperparameters specified by the WaB sweep configuration.
+
+        See Also:
+            - https://docs.wandb.ai/guides/sweeps/hyperparameter-optimization
+            - https://docs.wandb.ai/guides/integrations/keras
+
+        """
+        # Initialize the namespace/container for this particular trial run with WandB:
+        wab_trial_run = wab.init(
+            project='JustRAIGS', entity='appmais', config=wab.config, group=self._wab_group_name
+        )
+        # Workaround for exception logging:
+        sys.excepthook = exc_handler
+        # Wandb agent will override the defaults with the sweep configuration subset it has selected according to the
+        # specified 'method' in the config:
+        logger.info(f"wandb.config: {wab.config}")
+        # The sweep configuration for this particular trial will then be provided to the Model for hyperparameter
+        # parsing to ensure the hyperparameters specified are leveraged by the model (i.e. adherence is delegated):
+        model = InceptionV3WaBModel(
+            wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape_no_batch_dim,
+            batch_size=self._batch_size, num_classes=self._num_classes, name='InceptionV3WaBModel'
+        )
+        # Parse optimizer:
+        optimizer_config = wab.config['optimizer']
+        optimizer_type = optimizer_config['type']
+        optimizer_learning_rate = optimizer_config['learning_rate']
+        if optimizer_type == 'adam':
+            optimizer = Adam(learning_rate=optimizer_learning_rate)
+        else:
+            logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
+                         f"sweep configuration.")
+            exit(1)
+        # Parse loss function:
+        loss_function = wab.config['loss']
+        if loss_function == 'binary_crossentropy':
+            loss = BinaryCrossentropy(from_logits=False)
+        else:
+            logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
+                         f"configuration.")
+            exit(1)
+        # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
+        model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
+        # compile the model:
+        model.compile(optimizer=optimizer, loss=loss, metrics=self._metrics)
+        # .. todo: Should hparams be part of build or constructor?
+        # model = model.build(input_shape=self._image_shape_no_batch_dim, trial_hyperparameters=wab.config)
+        # Log the model summary to weights and biases console out:
+        wab_trial_run.log({"model_summary": model.summary()})
+        # Log the model summary to a text file and upload it as an artifact to weights and biases:
+        with open("model_summary.txt", "w") as fp:
+            with redirect_stdout(fp):
+                model.summary()
+        model_summary_artifact = wab.Artifact("model_summary", type='model_summary')
+        model_summary_artifact.add_file("model_summary.txt")
+        wab_trial_run.log_artifact(model_summary_artifact)
+        if self._training:
+            # Standard training loop:
+            self.run_trial(
+                model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
+                val_ds=self._val_ds, test_ds=self._test_ds,
+                num_epochs=wab.config['num_epochs'],
+                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+            )
+        else:
+            # Support for final training run performed after model selection process:
+            self.run_trial(
+                model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
+                train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
+                num_epochs=wab.config['num_epochs'],
+                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+            )
+        wab_trial_run.finish()
+        tf.keras.backend.clear_session()
 
 
 def exc_handler(exc_type, exc, tb):

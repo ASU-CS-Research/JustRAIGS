@@ -172,7 +172,12 @@ class WaBModel(Sequential):
             logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")
 
 
+@tf.keras.utils.register_keras_serializable(name='InceptionV3WaBModel')
 class InceptionV3WaBModel(Model):
+    """
+    A WaBModel that is constructed from a pretrained InceptionV3 model. This class is a useful reference for how to
+    implement transfer learning with WaB.
+    """
 
     def __init__(
             self, wab_trial_run: Optional[Run], trial_hyperparameters: Config, batch_size: int,
@@ -244,7 +249,7 @@ class InceptionV3WaBModel(Model):
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
             exit(1)
-        # Add a new head to the model (i.e. new Dense uflly connected layer and softmax):
+        # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
         model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='softmax')(model_head)
         self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
@@ -252,15 +257,70 @@ class InceptionV3WaBModel(Model):
         self._model.build((None,) + self._input_shape_no_batch)
         # Log the model summary to WaB:
         self._wab_trial_run.log({"model_summary": self._model.summary()})
-        with open("model_summary.txt", "w") as fp:
-            with redirect_stdout(fp):
-                self._model.summary()
-        model_summary_artifact = self._wab_trial_run.log_artifact("model_summary", type="model_summary")
-        model_summary_artifact.add_file("model_summary.txt")
-        wab_trial_run.log_artifact(model_summary_artifact)
         # Compile the model:
         self._model.compile(loss=self._loss, optimizer=self._optimizer)
         super().__init__(*args, **kwargs)
 
     def call(self, inputs, training=None, mask=None):
         return self._model(inputs, training=training, mask=mask)
+
+    def get_config(self):
+        """
+        Utilized to return a serialized representation of the model. This is used when restoring the model from disk.
+
+        .. todo:: Remove duplciate logic by refactoring the WaBModel as a superclass.
+
+        See Also:
+            - https://www.tensorflow.org/tutorials/keras/save_and_load#saving_custom_objects
+
+        """
+        base_config = super().get_config()
+        # .. todo:: Should the wab_trial_run object be serialized in the config?
+        config = {
+            'wab_trial_run': None, 'trial_hyperparameters': self._trial_hyperparameters.as_dict(),
+            'input_shape': self._input_shape_no_batch
+        }
+        return {**base_config, **config}
+
+    def save(self, *args, **kwargs):
+        """
+        Saves the model to disk preserving the trained weights. Loads the saved model back into memory immediately to
+        ensure that the weights were saved and deserialized correctly.
+
+        .. todo:: Remove duplicate code by refactoring the WaBModel as a superclass.
+
+        See Also:
+            - https://www.tensorflow.org/guide/keras/serialization_and_saving
+
+        """
+        logger.debug(f"save method received args: {args}")
+        logger.debug(f"save method received kwargs: {kwargs}")
+        saved_model_path = args[0]
+        # saved_model_path = saved_model_path.replace('.h5', '.keras')
+        overwrite = kwargs['overwrite']
+        if 'save_format' in kwargs:
+            save_format = kwargs['save_format']
+        else:
+            # When save_model is called with no save_format kwarg for the .h5 format:
+            save_format = 'h5'
+        if os.path.isfile(saved_model_path):
+            if overwrite:
+                super().save(saved_model_path, **kwargs)
+                logger.debug(f"Overwrote and saved model to: {saved_model_path}")
+        else:
+            super().save(saved_model_path, **kwargs)
+            logger.debug(f"Saved model to: {saved_model_path}")
+        if save_format == 'h5':
+            # Load in saved model and run assertions:
+            logger.debug(f"Loading saved model for weight assertion check...")
+            loaded_model = tf.keras.models.load_model(
+                args[0], custom_objects={"InceptionV3WaBModel": WaBModel}
+            )
+            # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
+            error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
+            np.testing.assert_equal(self.get_weights(), loaded_model.get_weights()), error_message
+        elif save_format == 'tf':
+            logger.warning(f"TensorFlow model format (.tf) save-and-restore logic is not yet working. Anticipate an "
+                           f"un-deserializable model.")
+        else:
+            logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")
