@@ -12,15 +12,15 @@ from loguru import logger
 
 def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
     """
-    Loads an image into a :class:`np.ndarray` preprocess it, return the label as an int.
+    Loads an image into a :class:`~numpy.ndarray` preprocess it, return the label as an :class:`int`.
 
     .. todo:: Add preprocessing logic here. Convert to grayscale, downsample, etc.
 
     Args:
-        *args: Variable length argument list. The inputs depend on the :class:`pd.DataFrame` object (or
-          :class:`pd.Series`) that the :meth:`pd.DataFrame.apply` method is called on.
-        **kwargs: Arbitrary keyword arguments. The inputs depend on the :class:`pd.DataFrame` object (or
-          :class:`pd.Series`) that the :meth:`pd.DataFrame.apply` method is called on.
+        *args: Variable length argument list. The inputs depend on the :class:`~pandas.DataFrame` object (or
+          :class:`~pandas.Series`) that the :meth:`~pandas.DataFrame.apply` method is called on.
+        **kwargs: Arbitrary keyword arguments. The inputs depend on the :class:`~pandas.DataFrame` object (or
+          :class:`~pandas.Series`) that the :meth:`~pandas.DataFrame.apply` method is called on.
 
     Returns:
         Tuple[tf.Tensor, tf.Tensor]: A tuple containing the image and its corresponding label.
@@ -49,7 +49,7 @@ def load_datasets(
         num_partitions: int, batch_size: int, num_images: Optional[int] = None, train_set_size: Optional[float] = 0.6,
         val_set_size: Optional[float] = 0.2, test_set_size: Optional[float] = 0.2, seed: Optional[int] = 42) -> [Dataset, Dataset, Dataset]:
     """
-    Constructs TensorFlow train, val, test :class:`tensorflow.data.Dataset` s from the provided high resolution image
+    Constructs TensorFlow train, val, test :class:`~tensorflow.data.Dataset` s from the provided high resolution image
     training set.
 
     Args:
@@ -69,19 +69,20 @@ def load_datasets(
           precedence over the specified number of partitions. However, if both ``num_partitions`` and ``num_images`` are
           specified then at most ``num_images`` will be loaded from the subset of partitions specified by
           ``num_partitions``, in other words the other partitions beyond the provided number will be untouched for
-          data loading. This value is mostly useful for debugging downstream pipelines, and it defaults to ``None``
+          data loading. This value is mostly useful for debugging downstream pipelines, and it defaults to :class:`None`
           indicating that all images in the partitions specified by ``num_partitions`` will be loaded.
         train_set_size (Optional[float]): The percentage of the data to use as the training dataset. This value defaults
-          to ``60%``.
+          to ``0.6`` (e.g. ``60%``).
         val_set_size (Optional[float]): The percentage of the data to use as the validation dataset. This value defaults
-          to ``20%``.
+          to ``0.2`` (e.g. ``20%``).
         test_set_size (Optional[float]): The percentage of the data to use as the testing dataset. This value defaults
-          to ``20%``.
+          to ``0.2`` (e.g. ``20%``).
         seed (Optional[int]): The random seed used to shuffle the data and split the dataset into training, validation,
           and testing sets. This value defaults to ``42``.
 
     Returns:
-        Tuple[Dataset, Dataset, Dataset]: A tuple containing the training, validation, and testing datasets.
+        Tuple[:class:`~tensorflow.data.Dataset`, :class:`~tensorflow.data.Dataset`, :class:`~tensorflow.data.Dataset`]:
+          A tuple containing the training, validation, and testing datasets.
 
     """
     high_res_train_data_path = os.path.abspath('/usr/local/data/JustRAIGS/raw/train')

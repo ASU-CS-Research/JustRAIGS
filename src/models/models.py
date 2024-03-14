@@ -17,7 +17,7 @@ from tensorflow.keras.losses import BinaryCrossentropy
 @tf.keras.utils.register_keras_serializable(name='WaBModel')
 class WaBModel(Sequential):
     """
-    This is an example WaB model that is instantiated repeatedly by the :class:`src.hypermodels.hypermodel.WaBHyperModel`.
+    This is an example WaB model that is instantiated repeatedly by the :class:`~src.hypermodels.hypermodels.WaBHyperModel`.
     This class encapsulates model construction and save and restore logic, which is particularly useful when leveraging
     custom layers or metrics.
     """
@@ -37,8 +37,8 @@ class WaBModel(Sequential):
             batch_size (int): The batch size to use for the training model.
             input_shape (Tuple[int, int, int]): The shape of the input tensor WITHOUT the batch dimension (that means no
               leading batch dimension integer and no leading ``None`` placeholder Tensor).
-            *args: Variable length argument list to pass through to the :class:`keras.Model` superclass constructor.
-            **kwargs: Arbitrary keyword arguments to pass through to the :class:`keras.Model` superclass constructor.
+            *args: Variable length argument list to pass through to the :class:`~tf.keras.Model` superclass constructor.
+            **kwargs: Arbitrary keyword arguments to pass through to the :class:`~tf.keras.Model` superclass constructor.
 
         Notes:
             If you are wondering about the usage of the decorator on this class see: https://www.tensorflow.org/tutorials/keras/save_and_load#saving_custom_objects

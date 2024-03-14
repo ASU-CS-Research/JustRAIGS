@@ -172,8 +172,8 @@ class WaBHyperModel:
         Args:
             model (:class:`tf.keras.Model`): The model to be trained with the hyperparameters specified by the trial.
             num_classes (int): The number of classes in the classification problem, this information is needed by
-              several of the custom callbacks (such as the :class:`src.callbacks.custom.ConfusionMatrixCallback`).
-            wab_trial_run (:class:`wandb.sdk.wandb_run.Run`): The WandB Run object for the current trial.
+              several of the custom callbacks (such as the :class:`~src.callbacks.custom.ConfusionMatrixCallback`).
+            wab_trial_run (:class:`~wandb.sdk.wandb_run.Run`): The WandB Run object for the current trial.
             train_ds (:class:`tf.data.Dataset`): The training dataset to which the provided :class:`tf.keras.Model` will
               be fit to.
             val_ds (:class:`tf.data.Dataset`): The validation dataset to which the provided :class:`tf.keras.Model` will
@@ -215,8 +215,9 @@ class WaBHyperModel:
 
 class InceptionV3WaBHyperModel(WaBHyperModel):
     """
-    An example of a WaB Hypermodel that leverages the InceptionV3WaBModel. This class is responsible for constructing
-    unique instances of the InceptionV3WaBModel for each trial (unique set of hyperparameters) and training the model.
+    An example of a WaB Hypermodel that leverages the :class:`~src.models.models.InceptionV3WaBModel`. This class is
+    responsible for constructing unique instances of the :class:`~src.models.models.InceptionV3WaBModel` for each trial
+    (unique set of hyperparameters) and training the model.
 
     .. todo:: Remove duplicate code by refactoring the base class. The only appreciable difference between this class
          and the base WaBHyperModel class is the type of model being instantiated.
