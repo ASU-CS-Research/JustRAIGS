@@ -273,7 +273,7 @@ class InceptionV3WaBModel(Model):
         """
         Utilized to return a serialized representation of the model. This is used when restoring the model from disk.
 
-        .. todo:: Remove duplciate logic by refactoring the WaBModel as a superclass.
+        .. todo:: Remove duplicate logic by refactoring the WaBModel as a superclass.
 
         See Also:
             - https://www.tensorflow.org/tutorials/keras/save_and_load#saving_custom_objects
@@ -283,7 +283,7 @@ class InceptionV3WaBModel(Model):
         # .. todo:: Should the wab_trial_run object be serialized in the config?
         config = {
             'wab_trial_run': None, 'trial_hyperparameters': self._trial_hyperparameters.as_dict(),
-            'input_shape': self._input_shape_no_batch
+            'input_shape': self._input_shape_no_batch, 'batch_size': self._batch_size
         }
         return {**base_config, **config}
 
@@ -302,16 +302,15 @@ class InceptionV3WaBModel(Model):
         logger.debug(f"save method received kwargs: {kwargs}")
         saved_model_path = args[0]
         # saved_model_path = saved_model_path.replace('.h5', '.keras')
-        overwrite = kwargs['overwrite']
+        # overwrite = kwargs['overwrite']
         if 'save_format' in kwargs:
             save_format = kwargs['save_format']
         else:
             # When save_model is called with no save_format kwarg for the .h5 format:
             save_format = 'h5'
         if os.path.isfile(saved_model_path):
-            if overwrite:
-                super().save(saved_model_path, **kwargs)
-                logger.debug(f"Overwrote and saved model to: {saved_model_path}")
+            super().save(saved_model_path, **kwargs)
+            logger.debug(f"Overwrote and saved model to: {saved_model_path}")
         else:
             super().save(saved_model_path, **kwargs)
             logger.debug(f"Saved model to: {saved_model_path}")
@@ -324,6 +323,9 @@ class InceptionV3WaBModel(Model):
             # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
             error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
             np.testing.assert_equal(self.get_weights(), loaded_model.get_weights()), error_message
+            saved_model_artifact = wab.Artifact("saved_model.h5", "saved_model")
+            saved_model_artifact.add_file(saved_model_path)
+            self._wab_trial_run.log_artifact(saved_model_artifact)
         elif save_format == 'tf':
             logger.warning(f"TensorFlow model format (.tf) save-and-restore logic is not yet working. Anticipate an "
                            f"un-deserializable model.")
