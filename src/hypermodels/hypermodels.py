@@ -214,6 +214,14 @@ class WaBHyperModel:
 
 
 class InceptionV3WaBHyperModel(WaBHyperModel):
+    """
+    An example of a WaB Hypermodel that leverages the InceptionV3WaBModel. This class is responsible for constructing
+    unique instances of the InceptionV3WaBModel for each trial (unique set of hyperparameters) and training the model.
+
+    .. todo:: Remove duplicate code by refactoring the base class. The only appreciable difference between this class
+         and the base WaBHyperModel class is the type of model being instantiated.
+
+    """
 
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
                  batch_size: int, metrics: List[Metric]):
