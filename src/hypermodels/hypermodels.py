@@ -15,7 +15,7 @@ import wandb as wab
 import sys
 from contextlib import redirect_stdout
 from src.callbacks.custom import ConfusionMatrixCallback
-from src.models.models import WaBModel, InceptionV3WaBModel
+from src.models.models import WaBModel, InceptionV3WaBModel, CVAEWaBModel
 from tensorflow.keras.losses import BinaryCrossentropy
 
 
@@ -304,6 +304,91 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
                 num_epochs=wab.config['num_epochs'],
                 inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
             )
+        wab_trial_run.finish()
+        tf.keras.backend.clear_session()
+
+
+class CVAEFeatureExtractorHyperModel(WaBHyperModel):
+    """
+    An example of a WaB Hypermodel that leverages the :class:`~src.models.models.CVAEFeatureExtractorWaBModel`. This
+    class is responsible for constructing unique instances of the :class:`~src.models.models.CVAEFeatureExtractorWaBModel`
+    for each trial (unique set of hyperparameters) and training the model that performs feature extraction.
+    """
+
+    def construct_model_run_trial(self):
+        """
+        This method is invoked REPEATEDLY by the WaB agent for each trial (unique set of hyperparameters). This method
+        must instantiate a new model that utilizes the set of hyperparameters specified by the trial. Then this method
+        must train the instantiated model, and log the results to WaB. Recall that each trial is a unique set of
+        hyperparameters specified by the WaB sweep configuration.
+
+        .. todo:: Remove duplicate code by refactoring the base class. The only appreciable difference between this
+             class and the base WaBHyperModel class is the type of model instantiated.
+
+        See Also:
+            - https://docs.wandb.ai/guides/sweeps/hyperparameter-optimization
+            - https://docs.wandb.ai/guides/integrations/keras
+
+        """
+        # Initialize the namespace/container for this particular trial run with WandB:
+        wab_trial_run = wab.init(
+            project='JustRAIGS', entity='appmais', config=wab.config, group=self._wab_group_name
+        )
+        # Workaround for exception logging:
+        sys.excepthook = exc_handler
+        # Wandb agent will override the defaults with the sweep configuration subset it has selected according to the
+        # specified 'method' in the config:
+        model = CVAEWaBModel(
+            wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape_no_batch_dim,
+            batch_size=self._batch_size, name='CVAEFeatureExtractorWaBModel', num_classes=self._num_classes
+        )
+        # Ensure required parameters are present in the sweep configuration:
+        if 'feature_extraction' not in wab.config:
+            logger.error(f"Feature extraction hyperparameters not found in the sweep configuration.")
+            exit(1)
+        else:
+            feature_extraction = wab.config['feature_extraction']
+        # Parse required parameters:
+        latent_dim = feature_extraction['latent_dim']
+        optimizer_params = feature_extraction['optimizer']['parameters']
+        optimizer_type = optimizer_params['type']
+        optimizer_learning_rate = optimizer_params['learning_rate']
+        if optimizer_type == 'adam':
+            optimizer = Adam(learning_rate=optimizer_learning_rate)
+        else:
+            logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
+                         f"sweep configuration.")
+            exit(1)
+        # Build the model:
+        model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
+        # Compile the model:
+        model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=self._metrics)
+        # Log the model summary to weights and biases console out:
+        wab_trial_run.log({"model_summary": model.summary()})
+        # Log the model summary to a text file and upload it as an artifact to weights and biases:
+        with open("model_summary.txt", "w") as fp:
+            with redirect_stdout(fp):
+                model.summary()
+        model_summary_artifact = wab.Artifact("model_summary", type='model_summary')
+        model_summary_artifact.add_file("model_summary.txt")
+        wab_trial_run.log_artifact(model_summary_artifact)
+        if self._training:
+            # Standard training loop:
+            self.run_trial(
+                model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
+                val_ds=self._val_ds, test_ds=self._test_ds,
+                num_epochs=wab.config['num_epochs'],
+                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+            )
+        else:
+            # Support for final training run performed after model selection process:
+            self.run_trial(
+                model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
+                train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
+                num_epochs=wab.config['num_epochs'],
+                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+            )
+        # .. todo:: Do we want a separate trial run for the feature extractor? If so, don't call finish here:
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
 
