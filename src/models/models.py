@@ -14,6 +14,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import BinaryCrossentropy
 import wandb as wab
 import matplotlib.pyplot as plt
+import time
 
 
 @tf.keras.utils.register_keras_serializable(name='WaBModel')
@@ -414,8 +415,8 @@ class CVAEWaBModel(Model):
                              f"{self._trial_hyperparameters}")
         self._encoder = Sequential([
             tf.keras.layers.InputLayer(input_shape=self._input_shape_no_batch),
-            tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation='relu', padding='valid'),
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation='relu', padding='valid'),
+            tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation='relu'),
+            tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation='relu'),
             tf.keras.layers.Flatten(),
             # No activation
             tf.keras.layers.Dense(self._latent_dim + self._latent_dim)
@@ -524,13 +525,51 @@ class CVAEWaBModel(Model):
 
         Args:
             x (:class:`~tensorflow.Tensor`): The input tensor to train the model on.
-            optimizer (:class:`~tensorflow.keras.optimizers.Optimizer`): The optimizer to use for training the model.
 
         """
+        if type(x) is tuple:
+            image = x[0]
+            label = x[1]
+            # Prepend batch dimension:
+            image = tf.reshape(image, (1,) + image.shape)
+        else:
+            image = x
+        logger.debug(f"Training step image.shape: {image.shape}")
         with tf.GradientTape() as tape:
-            loss = self.compute_loss(x[0])
+            loss = self.compute_loss(image)
         gradients = tape.gradient(loss, self.trainable_variables)
         self._optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+    def fit(
+            self, x, batch_size=None, epochs=1, verbose=1, callbacks=None, validation_split=0.0,
+            validation_data=None, shuffle=True, class_weight=None, sample_weight=None, initial_epoch=0,
+            steps_per_epoch=None, validation_steps=None, validation_batch_size=None, validation_freq=1,
+            max_queue_size=10, workers=1, use_multiprocessing=False):
+        """
+        See Also:
+            - https://www.tensorflow.org/tutorials/generative/cvae
+
+        """
+        logger.debug(f"Training model in .fit ...")
+        for i in range(1, epochs + 1):
+            start_time = time.time()
+            for train_image, train_label in x:
+                # Prepend batch dimension:
+                train_image = tf.reshape(train_image, (1,) + train_image.shape)
+                self.train_step(train_image)
+                train_loss = self.compute_loss(train_image)
+                self._loss(train_loss)
+            train_elbo = -self._loss.result()
+            end_time = time.time()
+            # Reset state for validation loss:
+            self._loss.reset_state()
+            for val_image, val_label in validation_data:
+                # Prepend batch dimension:
+                val_image = tf.reshape(val_image, (1,) + val_image.shape)
+                val_loss = self.compute_loss(val_image)
+                self._loss(val_loss)
+            val_elbo = -self._loss.result()
+            print(f"Epoch: {i}, Train set ELBO: {train_elbo}, Validation set ELBO: {val_elbo}, time elapse for current epoch: {end_time - start_time}")
 
     def call(self, inputs, training=None, mask=None):
         """
