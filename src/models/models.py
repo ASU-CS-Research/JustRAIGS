@@ -558,8 +558,10 @@ class CVAEWaBModel(Model):
                 train_image = tf.reshape(train_image, (1,) + train_image.shape)
                 self.train_step(train_image)
                 train_loss = self.compute_loss(train_image)
+                self._wab_trial_run.log({"loss": train_loss})
                 self._loss(train_loss)
             train_elbo = -self._loss.result()
+            self._wab_trial_run.log({"ELBO": train_elbo})
             end_time = time.time()
             # Reset state for validation loss:
             self._loss.reset_state()
@@ -567,8 +569,10 @@ class CVAEWaBModel(Model):
                 # Prepend batch dimension:
                 val_image = tf.reshape(val_image, (1,) + val_image.shape)
                 val_loss = self.compute_loss(val_image)
+                self._wab_trial_run.log({"val_loss": val_loss})
                 self._loss(val_loss)
             val_elbo = -self._loss.result()
+            self._wab_trial_run.log({"val_ELBO": val_elbo})
             print(f"Epoch: {i}, Train set ELBO: {train_elbo}, Validation set ELBO: {val_elbo}, time elapse for current epoch: {end_time - start_time}")
 
     def call(self, inputs, training=None, mask=None):
