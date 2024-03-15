@@ -315,6 +315,13 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
     for each trial (unique set of hyperparameters) and training the model that performs feature extraction.
     """
 
+    def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
+                 batch_size: int, metrics: List[Metric]):
+        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics)
+        # CVAE's don't use mini-batches per: https://www.tensorflow.org/tutorials/generative/cvae
+        self._image_shape_with_batch_dim = None
+        self._image_shape_no_batch_dim = tuple(self._train_ds.element_spec[0].shape)
+
     def construct_model_run_trial(self):
         """
         This method is invoked REPEATEDLY by the WaB agent for each trial (unique set of hyperparameters). This method
@@ -350,7 +357,7 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
             feature_extraction = wab.config['feature_extraction']
         # Parse required parameters:
         latent_dim = feature_extraction['latent_dim']
-        optimizer_params = feature_extraction['optimizer']['parameters']
+        optimizer_params = feature_extraction['optimizer']
         optimizer_type = optimizer_params['type']
         optimizer_learning_rate = optimizer_params['learning_rate']
         if optimizer_type == 'adam':
@@ -359,8 +366,8 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
                          f"sweep configuration.")
             exit(1)
-        # Build the model:
-        model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
+        # Build the model (assumes un-batched input datasets):
+        model.build(input_shape=(1, *self._image_shape_no_batch_dim))
         # Compile the model:
         model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=self._metrics)
         # Log the model summary to weights and biases console out:

@@ -6,7 +6,7 @@ from wandb.integration.keras import WandbCallback
 import wandb as wab
 import wandb.util
 from wandb.sdk.wandb_config import Config
-from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel
+from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel, CVAEFeatureExtractorHyperModel
 from src.utils.datasets import load_datasets
 
 
@@ -78,18 +78,23 @@ def main():
         },
         # For feature extraction:
         'feature_extraction': {
-            'optimizer': {
-                'parameters': {
-                    'type': {
-                        'value': 'adam'
-                    },
-                    'learning_rate': {
-                        'value': 1e-4
+            'parameters': {
+                'optimizer': {
+                    'parameters': {
+                        'type': {
+                            'value': 'adam'
+                        },
+                        'learning_rate': {
+                            'value': 1e-4
+                        }
                     }
+                },
+                'loss': {
+                    'value': 'mean'
+                },
+                'latent_dim': {
+                   'value': 2
                 }
-            },
-            'latent_dim': {
-               'value': 2
             }
         }
     }
@@ -112,7 +117,7 @@ def main():
     Initialize TensorFlow datasets:
     '''
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(1024, 1024), interpolation='bilinear', keep_aspect_ratio=False,
+        color_mode='grayscale', target_size=(28, 28), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
         num_images=50
     )
@@ -147,8 +152,26 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
-    # For Feature Extraction with a CVAE:
-
+    '''
+    For Feature Extraction with a CVAE:
+    '''
+    # CVAE's don't like mini-batches according to https://www.tensorflow.org/tutorials/generative/cvae:
+    train_ds = train_ds.unbatch()
+    val_ds = val_ds.unbatch()
+    test_ds = test_ds.unbatch()
+    hypermodel = CVAEFeatureExtractorHyperModel(
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        num_classes=NUM_CLASSES,
+        training=True,
+        batch_size=BATCH_SIZE,
+        metrics=[
+            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+            tf.keras.metrics.FalseNegatives()
+        ]
+    )
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial

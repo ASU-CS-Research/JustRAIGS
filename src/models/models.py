@@ -356,10 +356,10 @@ class CVAEWaBModel(Model):
 
         Args:
             wab_trial_run (Optional[Run]): The WaB run object that is responsible for logging the results of the current
-              trial. Used to log output to the same namespaced location in WaB. Note that this parameter is optional in the
-              event that the model is being loaded from a saved model format (e.g. h5) in which case the user may not wish
-              to log metrics to the same trial as the one that generated the saved model. During training it is expected
-              that this value is not ``None``.
+              trial. Used to log output to the same namespaced location in WaB. Note that this parameter is optional in
+              the event that the model is being loaded from a saved model format (e.g. h5) in which case the user may
+              not wish to log metrics to the same trial as the one that generated the saved model. During training it is
+              expected that this value is not ``None``.
             trial_hyperparameters (Config): The hyperparameters for this particular trial. These are provided by the WaB
               agent that is driving the sweep as a subset of the total hyperparameter search space.
             batch_size (int): The batch size to use for the training model.
@@ -402,8 +402,18 @@ class CVAEWaBModel(Model):
             self._latent_dim = feature_extraction_config['latent_dim']
         else:
             raise ValueError(f"latent_dim not found in trial hyperparameters: {self._trial_hyperparameters}")
+        if 'loss' in feature_extraction_config:
+            loss = feature_extraction_config['loss']
+            if loss == 'mean':
+                self._loss = tf.keras.metrics.Mean()
+            else:
+                raise ValueError(f"Unknown loss function: {loss} provided in the hyperparameter section of the sweep "
+                                 f"configuration.")
+        else:
+            raise ValueError(f"Loss function not found in trial hyperparameters for feature extraction: "
+                             f"{self._trial_hyperparameters}")
         self._encoder = Sequential([
-            tf.keras.layers.InputLayer(input_shape=self._input_shape_no_batch, batch_size=self._batch_size),
+            tf.keras.layers.InputLayer(input_shape=self._input_shape_no_batch),
             tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation='relu', padding='valid'),
             tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation='relu', padding='valid'),
             tf.keras.layers.Flatten(),
@@ -412,7 +422,7 @@ class CVAEWaBModel(Model):
         ])
         self._decoder = Sequential([
             tf.keras.layers.InputLayer(input_shape=(self._latent_dim,)),
-            tf.keras.layers.Dense(units=7 * 7 * 64, activation='relu'),
+            tf.keras.layers.Dense(units=7 * 7 * 32, activation='relu'),
             tf.keras.layers.Reshape(target_shape=(7, 7, 32)),
             tf.keras.layers.Conv2DTranspose(
                 filters=64, kernel_size=3, strides=(2, 2), padding='same', activation='relu'
@@ -518,9 +528,19 @@ class CVAEWaBModel(Model):
 
         """
         with tf.GradientTape() as tape:
-            loss = self.compute_loss(x)
+            loss = self.compute_loss(x[0])
         gradients = tape.gradient(loss, self.trainable_variables)
         self._optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+    def call(self, inputs, training=None, mask=None):
+        """
+
+        """
+        logger.debug(f"inputs: {inputs}")
+        self.train_step(inputs)
+        self._loss(self.compute_loss(inputs))
+        elbo = -self._loss.result()
+        return
 
     def generate_and_save_images(self, epoch: int, test_sample: tf.Tensor):
         mean, logvar = self.encode(test_sample)
