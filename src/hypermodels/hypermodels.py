@@ -16,6 +16,7 @@ import sys
 from contextlib import redirect_stdout
 from src.callbacks.custom import ConfusionMatrixCallback
 from src.models.models import WaBModel, InceptionV3WaBModel, CVAEWaBModel
+from src.models.cvae import VariationalAutoEncoder
 from tensorflow.keras.losses import BinaryCrossentropy
 
 
@@ -315,13 +316,6 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
     for each trial (unique set of hyperparameters) and training the model that performs feature extraction.
     """
 
-    def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
-                 batch_size: int, metrics: List[Metric]):
-        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics)
-        # CVAE's don't use mini-batches per: https://www.tensorflow.org/tutorials/generative/cvae
-        self._image_shape_with_batch_dim = None
-        self._image_shape_no_batch_dim = tuple(self._train_ds.element_spec[0].shape)
-
     def construct_model_run_trial(self):
         """
         This method is invoked REPEATEDLY by the WaB agent for each trial (unique set of hyperparameters). This method
@@ -339,15 +333,21 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
         """
         # Initialize the namespace/container for this particular trial run with WandB:
         wab_trial_run = wab.init(
-            project='JustRAIGS', entity='appmais', config=wab.config, group=self._wab_group_name
+            project='JustRAIGS', entity='appmais', config=wab.config, group=self._wab_group_name,
+            tags=['feature_extraction']
         )
         # Workaround for exception logging:
         sys.excepthook = exc_handler
         # Wandb agent will override the defaults with the sweep configuration subset it has selected according to the
         # specified 'method' in the config:
-        model = CVAEWaBModel(
-            wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape_no_batch_dim,
-            batch_size=self._batch_size, name='CVAEFeatureExtractorWaBModel', num_classes=self._num_classes
+        # model = CVAEWaBModel(
+        #     wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape_no_batch_dim,
+        #     batch_size=self._batch_size, name='CVAEFeatureExtractorWaBModel', num_classes=self._num_classes
+        # )
+        model = VariationalAutoEncoder(
+            wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, batch_size=self._batch_size,
+            input_shape=self._image_shape_no_batch_dim, num_classes=self._num_classes, original_dim=64,
+            name='VariationalAutoEncoder'
         )
         # Ensure required parameters are present in the sweep configuration:
         if 'feature_extraction' not in wab.config:
@@ -366,19 +366,20 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
                          f"sweep configuration.")
             exit(1)
-        # Build the model (assumes un-batched input datasets):
-        model.build(input_shape=(1, *self._image_shape_no_batch_dim))
+        loss = tf.keras.losses.MeanSquaredError()
+        # Build the model:
+        # model.build(input_shape=self._image_shape_with_batch_dim)
         # Compile the model:
-        model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=self._metrics)
+        # model.compile(optimizer=optimizer, loss=loss, metrics=self._metrics)
         # Log the model summary to weights and biases console out:
-        wab_trial_run.log({"model_summary": model.summary()})
-        # Log the model summary to a text file and upload it as an artifact to weights and biases:
-        with open("model_summary.txt", "w") as fp:
-            with redirect_stdout(fp):
-                model.summary()
-        model_summary_artifact = wab.Artifact("model_summary", type='model_summary')
-        model_summary_artifact.add_file("model_summary.txt")
-        wab_trial_run.log_artifact(model_summary_artifact)
+        # wab_trial_run.log({"model_summary": model.summary()})
+        # # Log the model summary to a text file and upload it as an artifact to weights and biases:
+        # with open("model_summary.txt", "w") as fp:
+        #     with redirect_stdout(fp):
+        #         model.summary()
+        # model_summary_artifact = wab.Artifact("model_summary", type='model_summary')
+        # model_summary_artifact.add_file("model_summary.txt")
+        # wab_trial_run.log_artifact(model_summary_artifact)
         if self._training:
             # Standard training loop:
             self.run_trial(

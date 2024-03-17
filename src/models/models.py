@@ -335,6 +335,8 @@ class InceptionV3WaBModel(Model):
             logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")
 
 
+
+
 class CVAEWaBModel(Model):
     """
     A Convolutional Variational Autoencoder (CVAE) model that is intended to be used as a feature extractor on the raw
@@ -343,6 +345,7 @@ class CVAEWaBModel(Model):
 
     See Also:
         - https://www.tensorflow.org/tutorials/generative/cvae
+        - https://www.tensorflow.org/guide/keras/making_new_layers_and_models_via_subclassing#putting_it_all_together_an_end-to-end_example
 
     """
 
@@ -414,7 +417,8 @@ class CVAEWaBModel(Model):
             raise ValueError(f"Loss function not found in trial hyperparameters for feature extraction: "
                              f"{self._trial_hyperparameters}")
         self._encoder = Sequential([
-            tf.keras.layers.InputLayer(input_shape=self._input_shape_no_batch),
+            # ..todo:: Dynamic input shape:
+            tf.keras.layers.InputLayer(input_shape=(28, 28, 1)),
             tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation='relu'),
             tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation='relu'),
             tf.keras.layers.Flatten(),
@@ -423,17 +427,17 @@ class CVAEWaBModel(Model):
         ])
         self._decoder = Sequential([
             tf.keras.layers.InputLayer(input_shape=(self._latent_dim,)),
-            tf.keras.layers.Dense(units=7 * 7 * 32, activation='relu'),
+            tf.keras.layers.Dense(units=7 * 7 * 32, activation=tf.nn.relu),
             tf.keras.layers.Reshape(target_shape=(7, 7, 32)),
             tf.keras.layers.Conv2DTranspose(
-                filters=64, kernel_size=3, strides=(2, 2), padding='same', activation='relu'
+                filters=64, kernel_size=3, strides=2, padding='same', activation='relu'
             ),
             tf.keras.layers.Conv2DTranspose(
-                filters=32, kernel_size=3, strides=(2, 2), padding='same', activation='relu'
+                filters=32, kernel_size=3, strides=2, padding='same', activation='relu'
             ),
             # No activation
             tf.keras.layers.Conv2DTranspose(
-                filters=1, kernel_size=3, strides=(1, 1), padding='same'
+                filters=1, kernel_size=3, strides=1, padding='same'
             )
         ])
 
@@ -504,41 +508,53 @@ class CVAEWaBModel(Model):
         log2pi = tf.math.log(2. * np.pi)
         return tf.reduce_sum(-.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi), axis=raxis)
 
-    def compute_loss(self, x: tf.Tensor):
+    def compute_loss(self, x: tf.Tensor) -> tf.Tensor:
         """
         Compute the loss for the CVAE model. This is the Monte Carlo estimate of the negative evidence lower bound
         (ELBO).
+
+        .. todo:: Docstring.
+
         """
+        logger.debug(f"compute_loss for x.shape: {x.shape}")
         mean, logvar = self.encode(x)
+        logger.debug(f"mean.shape, logvar.shape: {mean.shape}, {logvar.shape}")
         z = self.reparameterize(mean, logvar)
         x_logit = self.decode(z)
         cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=x)
         logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
         logpz = self.log_normal_pdf(z, 0., 0.)
         logqz_x = self.log_normal_pdf(z, mean, logvar)
-        return -tf.reduce_mean(logpx_z + logpz - logqz_x)
+        loss = -tf.reduce_mean(logpx_z + logpz - logqz_x)
+        return loss
 
     @tf.function
-    def train_step(self, x: tf.Tensor):
+    def train_step(self, x: tf.Tensor) -> tf.Tensor:
         """
         A single training step for the CVAE model.
 
         Args:
             x (:class:`~tensorflow.Tensor`): The input tensor to train the model on.
 
+        Returns:
+           (:class:`~tensorflow.Tensor`): The loss for the current training step.
+
         """
         if type(x) is tuple:
             image = x[0]
             label = x[1]
             # Prepend batch dimension:
-            image = tf.reshape(image, (1,) + image.shape)
+            # image = tf.reshape(image, (1,) + image.shape)
         else:
             image = x
-        logger.debug(f"Training step image.shape: {image.shape}")
+        # logger.debug(f"Training step image.shape: {image.shape}")
         with tf.GradientTape() as tape:
-            loss = self.compute_loss(image)
-        gradients = tape.gradient(loss, self.trainable_variables)
+            train_loss = self.compute_loss(image)
+        gradients = tape.gradient(train_loss, self.trainable_variables)
+        # Gradient clipping to 5.0 for extremely large negative gradients:
+        # gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
         self._optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        return train_loss
 
     def fit(
             self, x, batch_size=None, epochs=1, verbose=1, callbacks=None, validation_split=0.0,
@@ -554,10 +570,7 @@ class CVAEWaBModel(Model):
         for i in range(1, epochs + 1):
             start_time = time.time()
             for train_image, train_label in x:
-                # Prepend batch dimension:
-                train_image = tf.reshape(train_image, (1,) + train_image.shape)
-                self.train_step(train_image)
-                train_loss = self.compute_loss(train_image)
+                train_loss = self.train_step(train_image)
                 self._wab_trial_run.log({"loss": train_loss})
                 self._loss(train_loss)
             train_elbo = -self._loss.result()
@@ -566,8 +579,6 @@ class CVAEWaBModel(Model):
             # Reset state for validation loss:
             self._loss.reset_state()
             for val_image, val_label in validation_data:
-                # Prepend batch dimension:
-                val_image = tf.reshape(val_image, (1,) + val_image.shape)
                 val_loss = self.compute_loss(val_image)
                 self._wab_trial_run.log({"val_loss": val_loss})
                 self._loss(val_loss)
@@ -581,8 +592,8 @@ class CVAEWaBModel(Model):
         """
         logger.debug(f"inputs: {inputs}")
         self.train_step(inputs)
-        self._loss(self.compute_loss(inputs))
-        elbo = -self._loss.result()
+        # self._loss(self.compute_loss(inputs))
+        # elbo = -self._loss.result()
         return
 
     def generate_and_save_images(self, epoch: int, test_sample: tf.Tensor):

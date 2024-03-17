@@ -72,11 +72,11 @@ def main():
         'inference_target_conv_layer_name': {
             'values': ['conv_2d_2']
         },
-        # For transfer learning:
+        # For transfer learning with InceptionV3:
         'num_thawed_layers': {
             'value': 2
         },
-        # For feature extraction:
+        # For feature extraction with CVAE:
         'feature_extraction': {
             'parameters': {
                 'optimizer': {
@@ -93,7 +93,7 @@ def main():
                     'value': 'mean'
                 },
                 'latent_dim': {
-                   'value': 2
+                   'value': 2**1
                 }
             }
         }
@@ -117,13 +117,16 @@ def main():
     Initialize TensorFlow datasets:
     '''
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='grayscale', target_size=(28, 28), interpolation='bilinear', keep_aspect_ratio=False,
+        color_mode='grayscale', target_size=(64, 64), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
         num_images=50
     )
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep: 
     '''
+    # '''
+    # For standard classification tasks:
+    # '''
     # Construct WaB HyperModel:
     # hypermodel = WaBHyperModel(
     #     train_ds=train_ds,
@@ -138,7 +141,10 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
+
+    # '''
     # For Transfer Learning with InceptionV3:
+    # '''
     # hypermodel = InceptionV3WaBHyperModel(
     #     train_ds=train_ds,
     #     val_ds=val_ds,
@@ -152,13 +158,10 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
+
     '''
     For Feature Extraction with a CVAE:
     '''
-    # CVAE's don't like mini-batches according to https://www.tensorflow.org/tutorials/generative/cvae:
-    train_ds = train_ds.unbatch()
-    val_ds = val_ds.unbatch()
-    test_ds = test_ds.unbatch()
     hypermodel = CVAEFeatureExtractorHyperModel(
         train_ds=train_ds,
         val_ds=val_ds,
