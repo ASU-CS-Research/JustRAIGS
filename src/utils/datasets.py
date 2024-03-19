@@ -8,7 +8,13 @@ from sklearn.model_selection import train_test_split
 from tensorflow.data import Dataset
 import pandas as pd
 from loguru import logger
+import enum
 
+class DatasetSplit(enum.Enum):
+    TRAIN = 1
+    VALIDATION = 2
+    TEST = 3
+    TRAIN_AND_VALIDATION = 4
 
 def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
     """
@@ -183,6 +189,49 @@ def load_datasets(
     )
     return train_ds, val_ds, test_ds
 
+def get_oversampled_dataset(dataset_split: DatasetSplit, split_ds_neg: Dataset, split_ds_pos: Dataset,
+        split_ds_neg_files: Dataset, split_ds_pos_files: Dataset, batch_size: int, seed: int, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
+
+    num_pos_split_samples = len(list(split_ds_pos))
+    num_neg_split_samples = len(list(split_ds_neg))
+    logger.debug(f"Detected {num_pos_split_samples} positive samples in the unbalanced {dataset_split} "
+                 f"dataset.")
+    logger.debug(f"Detected {num_neg_split_samples} negative samples in the unbalanced {dataset_split} "
+                 f"dataset.")
+
+    split_ds_neg = split_ds_neg.shuffle(
+        buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
+    ).repeat()
+    split_ds_pos = split_ds_pos.shuffle(
+        buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
+    ).repeat()
+    split_ds = Dataset.sample_from_datasets(
+        datasets=[split_ds_pos, split_ds_neg],
+        weights=weights,
+        seed=seed
+    )
+
+    resampled_steps_per_epoch = int(np.ceil(num_neg_split_samples / (batch_size / 2)))
+    # Construct oversampled dataset of files:
+    split_ds_neg_files = split_ds_neg_files.shuffle(
+        buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
+    ).repeat()
+    split_ds_pos_files = split_ds_pos_files.shuffle(
+        buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
+    ).repeat()
+    split_ds_files = Dataset.sample_from_datasets(
+        datasets=[split_ds_pos_files, split_ds_neg_files],
+        weights=weights,
+        seed=seed
+    )
+    # Shuffle and pre-batch datasets:
+    split_ds = split_ds.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
+    split_ds = split_ds.batch(batch_size=batch_size, drop_remainder=True)
+    split_ds_files = split_ds_files.shuffle(
+        buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
+    )
+    split_ds_files = split_ds_files.batch(batch_size=batch_size, drop_remainder=True)
+    return split_ds_files, split_ds, resampled_steps_per_epoch
 
 if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
