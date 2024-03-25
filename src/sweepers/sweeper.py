@@ -6,7 +6,7 @@ from wandb.integration.keras import WandbCallback
 import wandb as wab
 import wandb.util
 from wandb.sdk.wandb_config import Config
-from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel
+from src.hypermodels.hypermodels import WaBHyperModel, EfficientNetB7WaBHyperModel
 from src.utils.datasets import load_datasets
 
 
@@ -60,7 +60,7 @@ def main():
         'optimizer': {
             'parameters': {
                 'type': {
-                    'value': 'adam',
+                    'value': 'sgd',
                     # 'values': ['adam', 'sgd', 'rmsprop']
                 },
                 'learning_rate': {
@@ -96,7 +96,7 @@ def main():
     Initialize TensorFlow datasets:
     '''
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False,
+        color_mode='rgb', target_size=(128, 128), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=1, batch_size=BATCH_SIZE,
         num_images=None
     )
@@ -117,8 +117,8 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
-    # For Transfer Learning with InceptionV3:
-    hypermodel = InceptionV3WaBHyperModel(
+    # For Transfer Learning with EfficientNetB7:
+    hypermodel = EfficientNetB7WaBHyperModel(
         train_ds=train_ds,
         val_ds=val_ds,
         test_ds=test_ds,
@@ -143,8 +143,8 @@ if __name__ == '__main__':
     which will remain constant between runs below. The hyperparameters which will be varied should be defined in the
     sweep configuration.
     """
-    NUM_TRIALS = 10
-    BATCH_SIZE = 10
+    NUM_TRIALS = 16
+    BATCH_SIZE = 16
     NUM_CLASSES = 2
     SEED = 42
     REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))

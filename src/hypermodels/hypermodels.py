@@ -2,20 +2,20 @@ import copy
 import traceback
 from typing import Tuple, Union, List, Optional, Dict, Any
 import tensorflow as tf
-import keras_tuner as kt
+# import keras_tuner as kt
 from keras.callbacks import History
 from loguru import logger
 from tensorflow.keras.metrics import Metric
 from tensorflow.keras import Model
 from tensorflow.data import Dataset
-from tensorflow.keras.optimizers import Optimizer, Adam
+from tensorflow.keras.optimizers import Optimizer, Adam, RMSprop, SGD
 from wandb.integration.keras import WandbCallback
 from wandb.sdk.wandb_run import Run
 import wandb as wab
 import sys
 from contextlib import redirect_stdout
 from src.callbacks.custom import ConfusionMatrixCallback
-from src.models.models import WaBModel, InceptionV3WaBModel
+from src.models.models import WaBModel, EfficientNetB7WaBModel
 from tensorflow.keras.losses import BinaryCrossentropy
 
 
@@ -213,10 +213,10 @@ class WaBHyperModel:
         return trial_history
 
 
-class InceptionV3WaBHyperModel(WaBHyperModel):
+class EfficientNetB7WaBHyperModel(WaBHyperModel):
     """
-    An example of a WaB Hypermodel that leverages the :class:`~src.models.models.InceptionV3WaBModel`. This class is
-    responsible for constructing unique instances of the :class:`~src.models.models.InceptionV3WaBModel` for each trial
+    An example of a WaB Hypermodel that leverages the :class:`~src.models.models.EfficientNetB7WaBModel`. This class is
+    responsible for constructing unique instances of the :class:`~src.models.models.EfficientNetB7WaBModel` for each trial
     (unique set of hyperparameters) and training the model.
 
     .. todo:: Remove duplicate code by refactoring the base class. The only appreciable difference between this class
@@ -251,9 +251,9 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
         logger.info(f"wandb.config: {wab.config}")
         # The sweep configuration for this particular trial will then be provided to the Model for hyperparameter
         # parsing to ensure the hyperparameters specified are leveraged by the model (i.e. adherence is delegated):
-        model = InceptionV3WaBModel(
+        model = EfficientNetB7WaBModel(
             wab_trial_run=wab_trial_run, trial_hyperparameters=wab.config, input_shape=self._image_shape_no_batch_dim,
-            batch_size=self._batch_size, num_classes=self._num_classes, name='InceptionV3WaBModel'
+            batch_size=self._batch_size, num_classes=self._num_classes, name='EfficientNetB7WaBModel'
         )
         # Parse optimizer:
         optimizer_config = wab.config['optimizer']
@@ -261,6 +261,10 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
         optimizer_learning_rate = optimizer_config['learning_rate']
         if optimizer_type == 'adam':
             optimizer = Adam(learning_rate=optimizer_learning_rate)
+        elif optimizer_type == 'sgd':
+            optimizer = SGD(learning_rate=optimizer_learning_rate)
+        elif optimizer_type == 'rmsprop':
+            optimizer = RMSprop(learning_rate=optimizer_learning_rate)
         else:
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
                          f"sweep configuration.")

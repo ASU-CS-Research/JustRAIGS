@@ -2,7 +2,7 @@ from contextlib import redirect_stdout
 from typing import Optional, Tuple, Dict, Any
 import numpy as np
 import tensorflow as tf
-from keras.applications import InceptionV3
+from keras.applications import EfficientNetB7
 from loguru import logger
 from wandb import Config
 from wandb.sdk.wandb_run import Run
@@ -10,7 +10,7 @@ import os
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 from tensorflow.keras.losses import BinaryCrossentropy
 import wandb as wab
 
@@ -177,10 +177,10 @@ class WaBModel(Sequential):
             logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")
 
 
-@tf.keras.utils.register_keras_serializable(name='InceptionV3WaBModel')
-class InceptionV3WaBModel(Model):
+@tf.keras.utils.register_keras_serializable(name='EfficientNetB7WaBModel')
+class EfficientNetB7WaBModel(Model):
     """
-    A WaBModel that is constructed from a pretrained InceptionV3 model. This class is a useful reference for how to
+    A WaBModel that is constructed from a pretrained EfficientNetB7 model. This class is a useful reference for how to
     implement transfer learning with WaB.
     """
 
@@ -216,12 +216,12 @@ class InceptionV3WaBModel(Model):
         self._batch_size = batch_size
         self._input_shape_no_batch = input_shape
         self._num_classes = num_classes
-        self._base_model = InceptionV3(
+        self._base_model = EfficientNetB7(
             include_top=False, weights='imagenet', input_shape=self._input_shape_no_batch, classes=self._num_classes
         )
         # Freeze the base model:
         for layer in self._base_model.layers:
-            layer.trainable = False
+            layer.trainable = True
         '''
         Build the model with the hyperparameters for this particular trial:
         '''
@@ -241,6 +241,10 @@ class InceptionV3WaBModel(Model):
         optimizer_learning_rate = optimizer_config['learning_rate']
         if optimizer_type == 'adam':
             self._optimizer = Adam(learning_rate=optimizer_learning_rate)
+        elif optimizer_type == 'sgd':
+            self._optimizer = SGD(learning_rate=optimizer_learning_rate)
+        elif optimizer_type == 'rmsprop':
+            self._optimizer = RMSprop(learning_rate=optimizer_learning_rate)
         else:
             self._optimizer = None
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
@@ -256,6 +260,7 @@ class InceptionV3WaBModel(Model):
             exit(1)
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
+        model_head = tf.keras.layers.Dense(512, activation='relu')(model_head)
         model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
         self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
         # Build the model:
@@ -318,7 +323,7 @@ class InceptionV3WaBModel(Model):
             # Load in saved model and run assertions:
             logger.debug(f"Loading saved model for weight assertion check...")
             loaded_model = tf.keras.models.load_model(
-                args[0], custom_objects={"InceptionV3WaBModel": WaBModel}
+                args[0], custom_objects={"EfficientNetB7WaBModel": WaBModel}
             )
             # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
             error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
