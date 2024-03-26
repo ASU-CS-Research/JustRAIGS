@@ -173,6 +173,7 @@ def load_datasets(
     )
     del test_ds_df
     del test_img_and_labels_df
+    train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
     '''
     Batch the datasets:
     '''
@@ -187,21 +188,45 @@ def load_datasets(
     test_ds = test_ds.batch(
         batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
     )
+
+
+
     return train_ds, val_ds, test_ds
 
 # def get_oversampled_dataset(dataset_split: DatasetSplit, split_ds_neg: Dataset, split_ds_pos: Dataset,
 #         split_ds_neg_files: Dataset, split_ds_pos_files: Dataset, batch_size: int, seed: int, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
-def get_oversampled_dataset( data : Optional[Dataset,str], batch_size: int, seed: int = 250, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
-    negative_referral_data = data.filter(lambda x: x['label'] == 0)
-    positive_referral_data = data.filter(lambda x: x['label'] == 1)
+
+def get_oversampled_dataset( data: Dataset, batch_size: int, seed: int = 250):
+    negative_referral_data = data.filter(lambda x, y: tf.math.equal(y, 0))
+    positive_referral_data = data.filter(lambda x, y: tf.math.equal(y, 1))
+
+    print(type(negative_referral_data))
+    print(type(positive_referral_data))
+
+    # negative_referral_data = tf.cast(negative_referral_data, tf.Tensor)
+    # positive_referral_data = tf.cast(positive_referral_data, tf.Tensor)
 
     pos_len = len(list(positive_referral_data))
     neg_len = len(list(negative_referral_data))
 
-    negative_repeat = negative_referral_data.repeat(input = negative_referral_data, repeat= int(pos_len / neg_len))
+    positive_repeat = positive_referral_data.repeat(int(neg_len / pos_len))
 
-    total_repeat = positive_referral_data.concatenate(negative_repeat)
+    total_repeat = negative_referral_data.concatenate(positive_repeat)
     total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
+    return total_repeat
+
+    # pandas_df = pd.read_csv(os.path.join(data, 'JustRAIGS_Train_labels.csv'), delimiter=';')
+
+    # count_NRG = 0
+    # count_RG = 0
+    # for i in range(6):
+    #     images_path = os.path.join(data, f"{i}")
+    #     for image in os.listdir(images_path):
+    #         image = image.split('.')[0]
+    #         if pandas_df.loc[pandas_df['Eye ID'] == image]['Final Label'].values[0] == 'NRG':
+    #             count_NRG += 1
+    #         else:
+    #             count_RG += 1
 
     # num_pos_split_samples = len(list(split_ds_pos))
     # num_neg_split_samples = len(list(split_ds_neg))

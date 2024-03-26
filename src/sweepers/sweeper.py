@@ -9,7 +9,6 @@ from wandb.sdk.wandb_config import Config
 from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel
 from src.utils.datasets import load_datasets
 
-
 def main():
     """
     Main driver for the hyperparameter search. This function is responsible for initializing the sweep configuration,
