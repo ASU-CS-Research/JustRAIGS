@@ -85,88 +85,112 @@ def load_datasets(
           A tuple containing the training, validation, and testing datasets.
 
     """
-    high_res_train_data_path = os.path.abspath('/usr/local/data/JustRAIGS/raw/train')
-    train_data_labels_csv_path = os.path.abspath(os.path.join(high_res_train_data_path, 'JustRAIGS_Train_labels.csv'))
-    assert os.path.isfile(train_data_labels_csv_path), f"Failed to find {train_data_labels_csv_path}"
-    train_data_labels_df = pd.read_csv(filepath_or_buffer=train_data_labels_csv_path, delimiter=';')
-    train_image_abs_file_paths = []
-    image_paths_df = pd.DataFrame()
-    assert num_partitions <= 6, f"num_partitions must be less than or equal to 6, got {num_partitions}"
-    assert num_partitions > 0, f"num_partitions must be greater than 0, got {num_partitions}"
-    for i in range(num_partitions):
-        train_set_partition_abs_path = os.path.join(high_res_train_data_path, f"{i}")
-        for root, dirs, files in os.walk(train_set_partition_abs_path):
-            for file_id, file in enumerate(files):
-                train_image_abs_file_path = os.path.join(root, file)
-                train_image_abs_file_paths.append(os.path.join(root, file))
-                image_paths_df = image_paths_df.append(
-                    {
-                        'AbsPath': train_image_abs_file_path,
-                        'Eye ID': file.split('.')[0]
-                    }, ignore_index=True
-                )
-                if num_images is not None:
-                    if file_id == num_images:
-                        break
-    # Modify the DataFrame to contain the absolute path to the 'Eye ID' training image:
-    train_data_labels_df = train_data_labels_df.merge(image_paths_df, on=['Eye ID'], how='outer')
-    del image_paths_df
-    # Convert 'NRG' = 0 and 'RG' = 1
-    final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
-    train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
-    # Drop rows with NaN absolute file paths:
-    train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
-    # Train, Validation, and Testing set partitioning:
-    train_ds_df, val_ds_df = train_test_split(
-        train_data_labels_df, train_size=train_set_size, test_size=val_set_size + test_set_size,
-        shuffle=True, random_state=seed
-    )
-    logger.debug(f"train_ds_df.shape: {train_ds_df.shape}")
-    val_ds_df, test_ds_df = train_test_split(
-        val_ds_df, train_size=val_set_size, test_size=test_set_size, shuffle=False
-    )
-    logger.debug(f"val_ds_df.shape: {val_ds_df.shape}")
-    logger.debug(f"test_ds_df.shape: {test_ds_df.shape}")
-    '''
-    At this point we have the dataframes partitioned into train, validation, and testing sets.
-    Now we need to convert them to TensorFlow Datasets:
-    '''
-    train_img_and_labels_df = train_ds_df[['AbsPath', 'Final Label Int']].apply(
-        load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
-            ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
-            ('keep_aspect_ratio', keep_aspect_ratio)
+    data_root_dir = os.path.abspath('/usr/local/data/JustRAIGS/')
+    # Check if this data has already been loaded and saved to disk:
+    dirname_from_args = (f"{color_mode}_{target_size[0]}_{target_size[1]}_{interpolation}_{keep_aspect_ratio}_"
+                         f"{num_partitions}_{num_images}_{train_set_size}_{val_set_size}_"
+                         f"{test_set_size}_{seed}")
+    dirname_from_args = dirname_from_args.replace('.', '_')
+    dirname_from_args = os.path.join(data_root_dir, 'interpolated', dirname_from_args)
+    train_dir_from_args = os.path.join(dirname_from_args, 'train')
+    val_dir_from_args = os.path.join(dirname_from_args, 'val')
+    test_dir_from_args = os.path.join(dirname_from_args, 'test')
+    if os.path.isdir(train_dir_from_args) and os.path.isdir(val_dir_from_args) and os.path.isdir(test_dir_from_args):
+        logger.debug("Found existing saved dataset for the specified arguments! Loading tf datasets from disk.")
+        train_ds = tf.data.Dataset.load(train_dir_from_args)
+        val_ds = tf.data.Dataset.load(val_dir_from_args)
+        test_ds = tf.data.Dataset.load(test_dir_from_args)
+    else:
+        logger.debug("No saved datasets found, loading in the data from scratch.")
+        high_res_train_data_path = os.path.join(data_root_dir, 'raw', 'train')
+        train_data_labels_csv_path = os.path.abspath(os.path.join(high_res_train_data_path, 'JustRAIGS_Train_labels.csv'))
+        assert os.path.isfile(train_data_labels_csv_path), f"Failed to find {train_data_labels_csv_path}"
+        train_data_labels_df = pd.read_csv(filepath_or_buffer=train_data_labels_csv_path, delimiter=';')
+        train_image_abs_file_paths = []
+        image_paths_df = pd.DataFrame()
+        assert num_partitions <= 6, f"num_partitions must be less than or equal to 6, got {num_partitions}"
+        assert num_partitions > 0, f"num_partitions must be greater than 0, got {num_partitions}"
+        for i in range(num_partitions):
+            train_set_partition_abs_path = os.path.join(high_res_train_data_path, f"{i}")
+            for root, dirs, files in os.walk(train_set_partition_abs_path):
+                for file_id, file in enumerate(files):
+                    train_image_abs_file_path = os.path.join(root, file)
+                    train_image_abs_file_paths.append(os.path.join(root, file))
+                    image_paths_df = image_paths_df.append(
+                        {
+                            'AbsPath': train_image_abs_file_path,
+                            'Eye ID': file.split('.')[0]
+                        }, ignore_index=True
+                    )
+                    if num_images is not None:
+                        if file_id == num_images:
+                            break
+        # Modify the DataFrame to contain the absolute path to the 'Eye ID' training image:
+        train_data_labels_df = train_data_labels_df.merge(image_paths_df, on=['Eye ID'], how='outer')
+        del image_paths_df
+        # Convert 'NRG' = 0 and 'RG' = 1
+        final_label_int_mask = train_data_labels_df['Final Label'] == 'RG'
+        train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
+        # Drop rows with NaN absolute file paths:
+        train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
+        # Train, Validation, and Testing set partitioning:
+        train_ds_df, val_ds_df = train_test_split(
+            train_data_labels_df, train_size=train_set_size, test_size=val_set_size + test_set_size,
+            shuffle=True, random_state=seed
         )
-    )
-    train_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
-    train_ds = tf.data.Dataset.from_tensor_slices(
-        (list(train_img_and_labels_df['NpImage']), list(train_img_and_labels_df['LabelTensor']))
-    )
-    del train_ds_df
-    del train_img_and_labels_df
-    val_img_and_labels_df = val_ds_df[['AbsPath', 'Final Label Int']].apply(
-        load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
-            ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
-            ('keep_aspect_ratio', keep_aspect_ratio)
+        logger.debug(f"train_ds_df.shape: {train_ds_df.shape}")
+        val_ds_df, test_ds_df = train_test_split(
+            val_ds_df, train_size=val_set_size, test_size=test_set_size, shuffle=False
         )
-    )
-    val_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
-    val_ds = tf.data.Dataset.from_tensor_slices(
-        (list(val_img_and_labels_df['NpImage']), list(val_img_and_labels_df['LabelTensor']))
-    )
-    del val_ds_df
-    del val_img_and_labels_df
-    test_img_and_labels_df = test_ds_df[['AbsPath', 'Final Label Int']].apply(
-        load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
-            ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
-            ('keep_aspect_ratio', keep_aspect_ratio)
+        logger.debug(f"val_ds_df.shape: {val_ds_df.shape}")
+        logger.debug(f"test_ds_df.shape: {test_ds_df.shape}")
+        '''
+        At this point we have the dataframes partitioned into train, validation, and testing sets.
+        Now we need to convert them to TensorFlow Datasets:
+        '''
+        train_img_and_labels_df = train_ds_df[['AbsPath', 'Final Label Int']].apply(
+            load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
+                ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
+                ('keep_aspect_ratio', keep_aspect_ratio)
+            )
         )
-    )
-    test_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
-    test_ds = tf.data.Dataset.from_tensor_slices(
-        (list(test_img_and_labels_df['NpImage']), list(test_img_and_labels_df['LabelTensor']))
-    )
-    del test_ds_df
-    del test_img_and_labels_df
+        train_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        train_ds = tf.data.Dataset.from_tensor_slices(
+            (list(train_img_and_labels_df['NpImage']), list(train_img_and_labels_df['LabelTensor']))
+        )
+        del train_ds_df
+        del train_img_and_labels_df
+        val_img_and_labels_df = val_ds_df[['AbsPath', 'Final Label Int']].apply(
+            load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
+                ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
+                ('keep_aspect_ratio', keep_aspect_ratio)
+            )
+        )
+        val_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        val_ds = tf.data.Dataset.from_tensor_slices(
+            (list(val_img_and_labels_df['NpImage']), list(val_img_and_labels_df['LabelTensor']))
+        )
+        del val_ds_df
+        del val_img_and_labels_df
+        test_img_and_labels_df = test_ds_df[['AbsPath', 'Final Label Int']].apply(
+            load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
+                ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
+                ('keep_aspect_ratio', keep_aspect_ratio)
+            )
+        )
+        test_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        test_ds = tf.data.Dataset.from_tensor_slices(
+            (list(test_img_and_labels_df['NpImage']), list(test_img_and_labels_df['LabelTensor']))
+        )
+        del test_ds_df
+        del test_img_and_labels_df
+        # Save the datasets to disk:
+        os.makedirs(train_dir_from_args, exist_ok=True)
+        train_ds.save(train_dir_from_args)
+        os.makedirs(val_dir_from_args, exist_ok=True)
+        val_ds.save(val_dir_from_args)
+        os.makedirs(test_dir_from_args, exist_ok=True)
+        test_ds.save(test_dir_from_args)
     '''
     Batch the datasets:
     '''
