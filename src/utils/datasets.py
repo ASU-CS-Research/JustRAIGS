@@ -119,7 +119,7 @@ def load_datasets(
     del image_paths_df
     # Convert 'NRG' = 0 and 'RG' = 1
     final_label_int_mask = train_data_labels_df['Final Label'] == 'RG' #####################################################################
-    train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
+    train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 1, 0)
     # Drop rows with NaN absolute file paths:
     train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
     # Train, Validation, and Testing set partitioning:
@@ -174,6 +174,7 @@ def load_datasets(
     del test_ds_df
     del test_img_and_labels_df
     train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
+    val_ds = get_oversampled_dataset(val_ds, batch_size=batch_size, seed=seed)
     '''
     Batch the datasets:
     '''
@@ -197,6 +198,8 @@ def load_datasets(
 #         split_ds_neg_files: Dataset, split_ds_pos_files: Dataset, batch_size: int, seed: int, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
 
 def get_oversampled_dataset( data: Dataset, batch_size: int, seed: int = 250):
+    logger.debug(f"Cardinality of data: {data.cardinality().numpy()}")
+
     negative_referral_data = data.filter(lambda x, y: tf.math.equal(y, 0))
     positive_referral_data = data.filter(lambda x, y: tf.math.equal(y, 1))
 
@@ -207,12 +210,49 @@ def get_oversampled_dataset( data: Dataset, batch_size: int, seed: int = 250):
     # positive_referral_data = tf.cast(positive_referral_data, tf.Tensor)
 
     pos_len = len(list(positive_referral_data))
+    logger.debug(f"pos_len: {pos_len}")
     neg_len = len(list(negative_referral_data))
+    logger.debug(f"neg_len: {neg_len}")
 
-    positive_repeat = positive_referral_data.repeat(int(neg_len / pos_len))
+    if neg_len > pos_len:
+        ratio = neg_len / pos_len
+        ratio = int(ratio)
+
+        logger.debug(f"neg_len / pos_len ratio: {ratio}")
+
+        positive_repeat = positive_referral_data.repeat(ratio)
+
+        total_repeat = negative_referral_data.concatenate(positive_repeat)
+        total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
+        # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
+        return total_repeat
+    else:
+        ratio = pos_len / neg_len
+        ratio = int(ratio)
+
+        logger.debug(f"neg_len / pos_len ratio: {ratio}")
+
+        negative_repeat = negative_referral_data.repeat(ratio)
+
+        total_repeat = positive_referral_data.concatenate(negative_repeat)
+        total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
+
+        logger.debug(f"len(total_repeat): {len(list(total_repeat))}")
+        logger.debug(f"len(the NRG values): {len(list(total_repeat.filter(lambda x, y: tf.math.equal(y, 0))))}")
+        logger.debug(f"len(the RG values): {len(list(total_repeat.filter(lambda x, y: tf.math.equal(y, 1))))}")
+
+        # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
+        return total_repeat
+
+    ratio = int(ratio)
+
+    logger.debug(f"neg_len / pos_len ratio: {ratio}")
+
+    positive_repeat = positive_referral_data.repeat(ratio)
 
     total_repeat = negative_referral_data.concatenate(positive_repeat)
     total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
+    # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
     return total_repeat
 
     # pandas_df = pd.read_csv(os.path.join(data, 'JustRAIGS_Train_labels.csv'), delimiter=';')

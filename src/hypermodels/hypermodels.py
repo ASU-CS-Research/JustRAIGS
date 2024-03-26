@@ -204,7 +204,7 @@ class WaBHyperModel:
         )
         # Declare custom Callbacks here:
         confusion_matrix_callback = ConfusionMatrixCallback(
-            num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=val_ds, validation_steps=None
+            num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=train_ds, validation_steps=None
         )
         # Fit the model and log the trial results to WaB:
         trial_history = model.fit(
