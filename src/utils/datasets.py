@@ -190,6 +190,9 @@ def load_datasets(
         )
         del test_ds_df
         del test_img_and_labels_df
+        # Oversample the training and validation datasets:
+        train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
+        val_ds = get_oversampled_dataset(val_ds, batch_size=batch_size, seed=seed)
         # Save the datasets to disk:
         os.makedirs(train_dir_from_args, exist_ok=True)
         train_ds.save(train_dir_from_args)
@@ -197,8 +200,6 @@ def load_datasets(
         val_ds.save(val_dir_from_args)
         os.makedirs(test_dir_from_args, exist_ok=True)
         test_ds.save(test_dir_from_args)
-    train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
-    val_ds = get_oversampled_dataset(val_ds, batch_size=batch_size, seed=seed)
     '''
     Batch the datasets:
     '''
@@ -219,15 +220,16 @@ def load_datasets(
 #         split_ds_neg_files: Dataset, split_ds_pos_files: Dataset, batch_size: int, seed: int, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
 
 def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int] = 250):
-    logger.debug(f"Cardinality of data: {data.cardinality().numpy()}")
+    logger.debug(f"Attempting to oversample the smaller class of the dataset. "
+                 f"Cardinality of data: {data.cardinality().numpy()}")
 
     negative_referral_data = data.filter(lambda x, y: tf.math.equal(y, 0))
     positive_referral_data = data.filter(lambda x, y: tf.math.equal(y, 1))
 
     pos_len = len(list(positive_referral_data))
-    logger.debug(f"pos_len: {pos_len}")
+    # logger.debug(f"pos_len: {pos_len}")
     neg_len = len(list(negative_referral_data))
-    logger.debug(f"neg_len: {neg_len}")
+    # logger.debug(f"neg_len: {neg_len}")
     if pos_len == 0 or neg_len == 0:
         logger.warning("One of the classes is empty. No oversampling will be performed.")
         return data
@@ -244,10 +246,11 @@ def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int]
     ratio = int(ratio)
     # logger.debug(f"longer_ds / shorter_ds ratio: {ratio}")
     shorter_repeat = shorter_ds.repeat(ratio)
-    logger.debug(f'New len of shorter_ds: {len(list(shorter_repeat.as_numpy_iterator()))}')
+    # logger.debug(f'New len of shorter_ds: {len(list(shorter_repeat.as_numpy_iterator()))}')
     total_repeat = longer_ds.concatenate(shorter_repeat)
     total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
     # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
+    logger.debug("Successfully oversampled.")
     return total_repeat
 
 
