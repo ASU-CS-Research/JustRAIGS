@@ -135,7 +135,7 @@ def load_datasets(
         train_data_labels_df = train_data_labels_df.merge(image_paths_df, on=['Eye ID'], how='outer')
         del image_paths_df
         # Convert 'NRG' = 0 and 'RG' = 1
-        final_label_int_mask = train_data_labels_df['Final Label'] == 'RG'
+        final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
         train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
         # Drop rows with NaN absolute file paths:
         train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
