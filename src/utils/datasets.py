@@ -118,7 +118,7 @@ def load_datasets(
     train_data_labels_df = train_data_labels_df.merge(image_paths_df, on=['Eye ID'], how='outer')
     del image_paths_df
     # Convert 'NRG' = 0 and 'RG' = 1
-    final_label_int_mask = train_data_labels_df['Final Label'] == 'RG' #####################################################################
+    final_label_int_mask = train_data_labels_df['Final Label'] == 'RG'
     train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 1, 0)
     # Drop rows with NaN absolute file paths:
     train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
@@ -197,117 +197,38 @@ def load_datasets(
 # def get_oversampled_dataset(dataset_split: DatasetSplit, split_ds_neg: Dataset, split_ds_pos: Dataset,
 #         split_ds_neg_files: Dataset, split_ds_pos_files: Dataset, batch_size: int, seed: int, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
 
-def get_oversampled_dataset( data: Dataset, batch_size: int, seed: int = 250):
+def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int] = 250):
     logger.debug(f"Cardinality of data: {data.cardinality().numpy()}")
 
     negative_referral_data = data.filter(lambda x, y: tf.math.equal(y, 0))
     positive_referral_data = data.filter(lambda x, y: tf.math.equal(y, 1))
 
-    print(type(negative_referral_data))
-    print(type(positive_referral_data))
-
-    # negative_referral_data = tf.cast(negative_referral_data, tf.Tensor)
-    # positive_referral_data = tf.cast(positive_referral_data, tf.Tensor)
-
     pos_len = len(list(positive_referral_data))
     logger.debug(f"pos_len: {pos_len}")
     neg_len = len(list(negative_referral_data))
     logger.debug(f"neg_len: {neg_len}")
-
-    if neg_len > pos_len:
-        ratio = neg_len / pos_len
-        ratio = int(ratio)
-
-        logger.debug(f"neg_len / pos_len ratio: {ratio}")
-
-        positive_repeat = positive_referral_data.repeat(ratio)
-
-        total_repeat = negative_referral_data.concatenate(positive_repeat)
-        total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
-        # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
-        return total_repeat
-    else:
-        ratio = pos_len / neg_len
-        ratio = int(ratio)
-
-        logger.debug(f"neg_len / pos_len ratio: {ratio}")
-
-        negative_repeat = negative_referral_data.repeat(ratio)
-
-        total_repeat = positive_referral_data.concatenate(negative_repeat)
-        total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
-
-        logger.debug(f"len(total_repeat): {len(list(total_repeat))}")
-        logger.debug(f"len(the NRG values): {len(list(total_repeat.filter(lambda x, y: tf.math.equal(y, 0))))}")
-        logger.debug(f"len(the RG values): {len(list(total_repeat.filter(lambda x, y: tf.math.equal(y, 1))))}")
-
-        # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
-        return total_repeat
-
+    if pos_len == 0 or neg_len == 0:
+        logger.warning("One of the classes is empty. No oversampling will be performed.")
+        return data
+    shorter_ds = positive_referral_data
+    shorter_length = pos_len
+    longer_ds = negative_referral_data
+    longer_length = neg_len
+    if pos_len > neg_len:
+        shorter_ds = negative_referral_data
+        shorter_length = neg_len
+        longer_ds = positive_referral_data
+        longer_length = pos_len
+    ratio = longer_length / shorter_length
     ratio = int(ratio)
-
-    logger.debug(f"neg_len / pos_len ratio: {ratio}")
-
-    positive_repeat = positive_referral_data.repeat(ratio)
-
-    total_repeat = negative_referral_data.concatenate(positive_repeat)
+    # logger.debug(f"longer_ds / shorter_ds ratio: {ratio}")
+    shorter_repeat = shorter_ds.repeat(ratio)
+    logger.debug(f'New len of shorter_ds: {len(list(shorter_repeat.as_numpy_iterator()))}')
+    total_repeat = longer_ds.concatenate(shorter_repeat)
     total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
     # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
     return total_repeat
 
-    # pandas_df = pd.read_csv(os.path.join(data, 'JustRAIGS_Train_labels.csv'), delimiter=';')
-
-    # count_NRG = 0
-    # count_RG = 0
-    # for i in range(6):
-    #     images_path = os.path.join(data, f"{i}")
-    #     for image in os.listdir(images_path):
-    #         image = image.split('.')[0]
-    #         if pandas_df.loc[pandas_df['Eye ID'] == image]['Final Label'].values[0] == 'NRG':
-    #             count_NRG += 1
-    #         else:
-    #             count_RG += 1
-
-    # num_pos_split_samples = len(list(split_ds_pos))
-    # num_neg_split_samples = len(list(split_ds_neg))
-    # logger.debug(f"Detected {num_pos_split_samples} positive samples in the unbalanced {dataset_split} "
-    #              f"dataset.")
-    # logger.debug(f"Detected {num_neg_split_samples} negative samples in the unbalanced {dataset_split} "
-    #              f"dataset.")
-
-    # split_ds_neg = split_ds_neg.shuffle(
-    #     buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
-    # ).repeat()
-    # split_ds_pos = split_ds_pos.shuffle(
-    #     buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
-    # ).repeat()
-    # split_ds = Dataset.sample_from_datasets(
-    #     datasets=[split_ds_pos, split_ds_neg],
-    #     weights=weights,
-    #     seed=seed
-    # )
-
-    # resampled_steps_per_epoch = int(np.ceil(num_neg_split_samples / (batch_size / 2)))
-    # # Construct oversampled dataset of files:
-    # split_ds_neg_files = split_ds_neg_files.shuffle(
-    #     buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
-    # ).repeat()
-    # split_ds_pos_files = split_ds_pos_files.shuffle(
-    #     buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
-    # ).repeat()
-    # split_ds_files = Dataset.sample_from_datasets(
-    #     datasets=[split_ds_pos_files, split_ds_neg_files],
-    #     weights=weights,
-    #     seed=seed
-    # )
-    # # Shuffle and pre-batch datasets:
-    # split_ds = split_ds.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
-    # split_ds = split_ds.batch(batch_size=batch_size, drop_remainder=True)
-    # split_ds_files = split_ds_files.shuffle(
-    #     buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False
-    # )
-    # split_ds_files = split_ds_files.batch(batch_size=batch_size, drop_remainder=True)
-    # return split_ds_files, split_ds, resampled_steps_per_epoch
 
 if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
