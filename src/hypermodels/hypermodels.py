@@ -18,6 +18,16 @@ from src.callbacks.custom import ConfusionMatrixCallback
 from src.models.models import WaBModel, InceptionV3WaBModel, CVAEWaBModel
 from src.models.cvae import VariationalAutoEncoder
 from tensorflow.keras.losses import BinaryCrossentropy
+from wandb.sdk.wandb_config import Config
+from enum import Enum
+
+class ModelType(Enum):
+    """
+    An enumeration of the different types of models that can be trained by the WaB HyperModel.
+    """
+    BINARY_CLASSIFICATION = 'binary_classification'
+    MULTICLASS_CLASSIFICATION = 'multiclass_classification'
+    FEATURE_EXTRACTION = 'feature_extraction'
 
 
 class WaBHyperModel:
@@ -228,6 +238,16 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
                  batch_size: int, metrics: List[Metric]):
         super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics)
+        self._model_name = 'InceptionV3'
+        self._model_type = ModelType.BINARY_CLASSIFICATION if num_classes == 2 else ModelType.MULTICLASS_CLASSIFICATION
+
+    @property
+    def model_name(self):
+        return self._model_name
+
+    @property
+    def model_type(self):
+        return self._model_type
 
     def construct_model_run_trial(self):
         """
@@ -411,3 +431,58 @@ def exc_handler(exc_type, exc, tb):
     traceback.print_exception(exc_type, exc, tb)
 
 
+def flatten_hyperparameters(hyperparameters: Config, model_name: str, model_type: ModelType) -> Dict[str, Any]:
+    """
+    This method is responsible for flattening the hyperparameters specified in the sweep configuration into a single
+    dictionary, for convenience's sake. This method expects a wandb_config dictionary laid out like so:
+    {
+        'global': {
+            'parameters': {
+                'binary_classification': {
+                    parameters: {
+                        *global binary classification hyperparameters*
+                    }
+                },
+                ...
+            }
+        },
+        'binary_classification': {
+            parameters: {
+                'InceptionV3': {
+                    parameters: {
+                        *InceptionV3 specific hyperparameters*
+                    }
+                },
+                'EfficientNetB0': {
+                    parameters: {
+                        *EfficientNetB0 specific hyperparameters*
+                    }
+                },
+                ...
+            }
+        }
+    }
+    Args:
+        hyperparameters (Dict[str, Any]): Configuration
+        model_name (str):
+        model_type (ModelType):
+
+    Returns:
+        Dict[str, Any]: The flattened hyperparameters dictionary. The example config above with the parameters
+          model_name='InceptionV3' and model_type=ModelType.BINARY_CLASSIFICATION would be flattened to:
+          {
+              *global binary classification hyperparameters*,
+              *InceptionV3 specific hyperparameters*
+          }
+          With any overlaps between the two dictionaries resolved by the InceptionV3 specific hyperparameters.
+    """
+    # Initialize the flattened hyperparameters dictionary:
+    flattened_hyperparameters = {}
+    # Extract the global hyperparameters:
+    global_hyperparameters = hyperparameters['global']['parameters'][model_type.value]
+    # Extract the model specific hyperparameters:
+    model_specific_hyperparameters = hyperparameters[model_type.value]['parameters'][model_name]
+    # Flatten the hyperparameters:
+    flattened_hyperparameters.update(global_hyperparameters['parameters'])
+    flattened_hyperparameters.update(model_specific_hyperparameters['parameters'])
+    return flattened_hyperparameters

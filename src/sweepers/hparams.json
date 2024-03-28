@@ -61,25 +61,25 @@
           "num_epochs": {
             "value": 100
           }
-        },
-        "feature_extraction": {
-          "parameters": {
-            "input_shape": {
-              "parameters": {
-                "width_px": {
-                  "value": 64
-                },
-                "height_px": {
-                  "value": 64
-                },
-                "channels": {
-                  "value": 3
-                }
+        }
+      },
+      "feature_extraction": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
               }
-            },
-            "num_epochs": {
-              "value": 100
             }
+          },
+          "num_epochs": {
+            "value": 100
           }
         }
       }
@@ -186,47 +186,51 @@
           }
         }
       }
-    },
-    "feature_extraction": {
-      "parameters": {
-        "CVAE": {
-          "parameters": {
-            "input_shape": {
-              "parameters": {
-                "width_px": {
-                  "value": 64
-                },
-                "height_px": {
-                  "value": 64
-                },
-                "channels": {
-                  "value": 3
-                }
+    }
+  },
+  "feature_extraction": {
+    "parameters": {
+      "CVAE": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
               }
-            },
-            "latent_dim": {
-              "value": 2
             }
+          },
+          "latent_dim": {
+            "value": 2
           }
-        },
-        "PCA": {
-          "parameters": {
-            "input_shape": {
-              "parameters": {
-                "width_px": {
-                  "value": 64
-                },
-                "height_px": {
-                  "value": 64
-                },
-                "channels": {
-                  "value": 3
-                }
+        }
+      },
+      "PCA": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
               }
-            },
-            "n_components": {
-              "values": [2, 4, 8]
             }
+          },
+          "n_components": {
+            "values": [
+              2,
+              4,
+              8
+            ]
           }
         }
       }
