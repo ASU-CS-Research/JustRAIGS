@@ -21,6 +21,7 @@ from tensorflow.keras.losses import BinaryCrossentropy
 from wandb.sdk.wandb_config import Config
 from enum import Enum
 
+
 class ModelType(Enum):
     """
     An enumeration of the different types of models that can be trained by the WaB HyperModel.
@@ -155,16 +156,14 @@ class WaBHyperModel:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
-                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+                num_epochs=wab.config['num_epochs']
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
-                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+                num_epochs=wab.config['num_epochs']
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
@@ -403,16 +402,14 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
-                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+                num_epochs=wab.config['num_epochs']
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
-                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+                num_epochs=wab.config['num_epochs']
             )
         # .. todo:: Do we want a separate trial run for the feature extractor? If so, don't call finish here:
         wab_trial_run.finish()
