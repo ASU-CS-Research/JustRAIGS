@@ -135,7 +135,7 @@ def load_datasets(
         train_data_labels_df = train_data_labels_df.merge(image_paths_df, on=['Eye ID'], how='outer')
         del image_paths_df
         # Convert 'NRG' = 0 and 'RG' = 1
-        final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
+        final_label_int_mask = train_data_labels_df['Final Label'] == 'RG'
         train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
         # Drop rows with NaN absolute file paths:
         train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
@@ -219,7 +219,18 @@ def load_datasets(
 # def get_oversampled_dataset(dataset_split: DatasetSplit, split_ds_neg: Dataset, split_ds_pos: Dataset,
 #         split_ds_neg_files: Dataset, split_ds_pos_files: Dataset, batch_size: int, seed: int, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
 
-def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int] = 250):
+def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int] = 250) -> Dataset:
+    """
+    Oversamples the smaller class of the dataset to balance the class distribution.
+
+    Args:
+        data (Dataset): The dataset to oversample.
+        batch_size (int): The batch size to use for the oversampled dataset.
+        seed (Optional[int]): The random seed used to shuffle the data. This value defaults to ``250``.
+
+    Returns:
+        Dataset: The oversampled dataset.
+    """
     logger.debug(f"Attempting to oversample the smaller class of the dataset. "
                  f"Cardinality of data: {data.cardinality().numpy()}")
 
