@@ -309,11 +309,13 @@ class InceptionV3WaBModel(Model):
             # When save_model is called with no save_format kwarg for the .h5 format:
             save_format = 'h5'
         if os.path.isfile(saved_model_path):
-            super().save(saved_model_path, **kwargs)
+            # super().save(saved_model_path, **kwargs)
+            super().save(saved_model_path, save_format=save_format)
             logger.debug(f"Overwrote and saved model to: {saved_model_path}")
         else:
             os.makedirs(saved_model_path, exist_ok=True)
-            super().save(saved_model_path, **kwargs)
+            # super().save(saved_model_path, **kwargs)
+            super().save(saved_model_path, save_format=save_format)
             logger.debug(f"Saved model to: {saved_model_path}")
         if save_format == 'h5':
             # Load in saved model and run assertions:
@@ -331,6 +333,8 @@ class InceptionV3WaBModel(Model):
             logger.warning(f"TensorFlow model format (.tf) save-and-restore logic is not yet working. Anticipate an "
                            f"un-deserializable model.")
             new_model = tf.keras.models.load_model(saved_model_path)
+            new_save_dir = os.path.join(saved_model_path, "..","current_best_model")
+            os.system(f"cp -r {saved_model_path} {new_save_dir}")
             error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
             np.testing.assert_equal(self.get_weights(), new_model.get_weights()), error_message
         else:
