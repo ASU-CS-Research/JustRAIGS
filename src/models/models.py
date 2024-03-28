@@ -230,7 +230,7 @@ class InceptionV3WaBModel(Model):
         # Ensure the necessary hyperparameters are present in the search space:
         if 'num_thawed_layers' in self._trial_hyperparameters:
             for i in range(self._trial_hyperparameters['num_thawed_layers']):
-                self._base_model.layers[-i * i].trainable = True
+                self._base_model.layers[-i].trainable = True
         else:
             raise ValueError(f"num_thawed_layers not found in trial hyperparameters: {self._trial_hyperparameters}")
         if 'optimizer' not in self._trial_hyperparameters:
@@ -258,7 +258,7 @@ class InceptionV3WaBModel(Model):
             exit(1)
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
-        model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='softmax')(model_head)
+        model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
         self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
         # Build the model:
         self._model.build((None,) + self._input_shape_no_batch)

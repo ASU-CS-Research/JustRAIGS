@@ -73,24 +73,7 @@ def main():
     For standard classification tasks:
     '''
     # Construct WaB HyperModel:
-    hypermodel = WaBHyperModel(
-        train_ds=train_ds,
-        val_ds=val_ds,
-        test_ds=test_ds,
-        num_classes=NUM_CLASSES,
-        training=True,
-        batch_size=BATCH_SIZE,
-        metrics=[
-            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-            tf.keras.metrics.FalseNegatives()
-        ]
-    )
-
-    # '''
-    # For Transfer Learning with InceptionV3:
-    # '''
-    # hypermodel = InceptionV3WaBHyperModel(
+    # hypermodel = WaBHyperModel(
     #     train_ds=train_ds,
     #     val_ds=val_ds,
     #     test_ds=test_ds,
@@ -103,6 +86,23 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
+
+    # '''
+    # For Transfer Learning with InceptionV3:
+    # '''
+    hypermodel = InceptionV3WaBHyperModel(
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        num_classes=NUM_CLASSES,
+        training=True,
+        batch_size=BATCH_SIZE,
+        metrics=[
+            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+            tf.keras.metrics.FalseNegatives()
+        ]
+    )
 
     # '''
     # For Feature Extraction with a CVAE:
