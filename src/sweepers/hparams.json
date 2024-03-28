@@ -107,6 +107,16 @@
           },
           "loss": {
             "value": "binary_crossentropy"
+          },
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.001
+              }
+            }
           }
         }
       },

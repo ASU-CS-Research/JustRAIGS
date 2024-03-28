@@ -172,7 +172,7 @@ class WaBHyperModel:
     @staticmethod
     def run_trial(
             model: Model, num_classes: int, wab_trial_run: Run, train_ds: Dataset, val_ds: Optional[Dataset],
-            test_ds: Dataset, num_epochs: int, inference_target_conv_layer_name: str) -> History:
+            test_ds: Dataset, num_epochs: int) -> History:
         """
         Runs an individual trial (i.e. a unique set of hyperparameters) for the model as part of an overarching sweep.
         This method is responsible for training (i.e. fitting) the model, and maintaining a :class:`keras.callbacks.History`
@@ -314,16 +314,14 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
-                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+                num_epochs=wab.config['num_epochs']
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
-                inference_target_conv_layer_name=wab.config['inference_target_conv_layer_name']
+                num_epochs=wab.config['num_epochs']
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
