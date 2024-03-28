@@ -6,6 +6,7 @@ from wandb.integration.keras import WandbCallback
 import wandb as wab
 import wandb.util
 from wandb.sdk.wandb_config import Config
+import json
 from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel, CVAEFeatureExtractorHyperModel
 from src.utils.datasets import load_datasets
 
@@ -37,67 +38,11 @@ def main():
     # Note: Do not use the keras object for the optimizer (e.g. Adam(learning_rate=0.001) instead of 'adam')
     # or you get a RuntimeError('Should only create a single instance of _DefaultDistributionStrategy.') this may be a
     # WaB bug which will be addressed in future updates.
-    hyperparameters = {
-        'num_epochs': {
-            'value': 5,
-            # 'values': [10, 20, 30]
-        },
-        'loss': {
-            'value': 'binary_crossentropy'
-        },
-        'conv_layer_activation_function': {
-            'value': 'tanh'
-        },
-        'kernel_size': {
-            'value': 11,
-        },
-        'num_nodes_conv_1': {
-            'value': 2**3
-        },
-        'num_nodes_conv_2': {
-            'value': 2**0
-        },
-        'optimizer': {
-            'parameters': {
-                'type': {
-                    'value': 'adam',
-                    # 'values': ['adam', 'sgd', 'rmsprop']
-                },
-                'learning_rate': {
-                    'value': 0.001,
-                    # 'values': [0.001, 0.01, 0.1]
-                }
-            }
-        },
-        'inference_target_conv_layer_name': {
-            'values': ['conv_2d_2']
-        },
-        # For transfer learning with InceptionV3:
-        'num_thawed_layers': {
-            'value': 2
-        },
-        # For feature extraction with CVAE:
-        'feature_extraction': {
-            'parameters': {
-                'optimizer': {
-                    'parameters': {
-                        'type': {
-                            'value': 'adam'
-                        },
-                        'learning_rate': {
-                            'value': 1e-4
-                        }
-                    }
-                },
-                'loss': {
-                    'value': 'mean'
-                },
-                'latent_dim': {
-                   'value': 2**1
-                }
-            }
-        }
-    }
+    assert os.path.exists(HPARAM_JSON_PATH), f"Hyperparameter JSON file not found at: {HPARAM_JSON_PATH}"
+    # Load hparams.json:
+    with open(HPARAM_JSON_PATH, 'r') as fp:
+        hyperparameters = json.load(fp=fp)
+    # Add to the sweep configuration:
     sweep_configuration = {
         'method': 'grid',   # 'method': 'random'
         'project': 'JustRAIGS',
@@ -124,23 +69,23 @@ def main():
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep: 
     '''
-    # '''
-    # For standard classification tasks:
-    # '''
+    '''
+    For standard classification tasks:
+    '''
     # Construct WaB HyperModel:
-    # hypermodel = WaBHyperModel(
-    #     train_ds=train_ds,
-    #     val_ds=val_ds,
-    #     test_ds=test_ds,
-    #     num_classes=NUM_CLASSES,
-    #     training=True,
-    #     batch_size=BATCH_SIZE,
-    #     metrics=[
-    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-    #         tf.keras.metrics.FalseNegatives()
-    #     ]
-    # )
+    hypermodel = WaBHyperModel(
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        num_classes=NUM_CLASSES,
+        training=True,
+        batch_size=BATCH_SIZE,
+        metrics=[
+            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+            tf.keras.metrics.FalseNegatives()
+        ]
+    )
 
     # '''
     # For Transfer Learning with InceptionV3:
@@ -159,22 +104,22 @@ def main():
     #     ]
     # )
 
-    '''
-    For Feature Extraction with a CVAE:
-    '''
-    hypermodel = CVAEFeatureExtractorHyperModel(
-        train_ds=train_ds,
-        val_ds=val_ds,
-        test_ds=test_ds,
-        num_classes=NUM_CLASSES,
-        training=True,
-        batch_size=BATCH_SIZE,
-        metrics=[
-            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-            tf.keras.metrics.FalseNegatives()
-        ]
-    )
+    # '''
+    # For Feature Extraction with a CVAE:
+    # '''
+    # hypermodel = CVAEFeatureExtractorHyperModel(
+    #     train_ds=train_ds,
+    #     val_ds=val_ds,
+    #     test_ds=test_ds,
+    #     num_classes=NUM_CLASSES,
+    #     training=True,
+    #     batch_size=BATCH_SIZE,
+    #     metrics=[
+    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+    #         tf.keras.metrics.FalseNegatives()
+    #     ]
+    # )
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
@@ -200,8 +145,10 @@ if __name__ == '__main__':
     if not os.path.exists(LOCAL_DATA_DIR):
         os.makedirs(LOCAL_DATA_DIR)
     DATA_DIR = '/usr/local/data/JustRAIGS/raw/'
+    HPARAM_JSON_PATH = os.path.join(REPO_ROOT_DIR, 'src/sweepers/hparams.json')
     logger.debug(f"WANDB_DIR: {LOG_DIR}")
     logger.debug(f"LOCAL_DATA_DIR: {LOCAL_DATA_DIR}")
     logger.debug(f"DATA_DIR: {DATA_DIR}")
+    logger.debug(f"HPARAM_JSON_PATH: {HPARAM_JSON_PATH}")
     tf.random.set_seed(seed=SEED)
     main()
