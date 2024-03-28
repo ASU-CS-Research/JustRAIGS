@@ -312,6 +312,7 @@ class InceptionV3WaBModel(Model):
             super().save(saved_model_path, **kwargs)
             logger.debug(f"Overwrote and saved model to: {saved_model_path}")
         else:
+            os.makedirs(saved_model_path, exist_ok=True)
             super().save(saved_model_path, **kwargs)
             logger.debug(f"Saved model to: {saved_model_path}")
         if save_format == 'h5':
@@ -329,5 +330,8 @@ class InceptionV3WaBModel(Model):
         elif save_format == 'tf':
             logger.warning(f"TensorFlow model format (.tf) save-and-restore logic is not yet working. Anticipate an "
                            f"un-deserializable model.")
+            new_model = tf.keras.models.load_model(saved_model_path)
+            error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
+            np.testing.assert_equal(self.get_weights(), new_model.get_weights()), error_message
         else:
             logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")
