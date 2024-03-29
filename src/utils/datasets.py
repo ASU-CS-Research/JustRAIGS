@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from typing import Tuple, Optional
 import keras
@@ -185,11 +186,14 @@ def load_datasets(
         del test_ds_df
         del test_img_and_labels_df
         # Save the datasets to disk:
-        os.makedirs(train_dir_from_args, exist_ok=True)
+        os.makedirs(train_dir_from_args, exist_ok=True, mode=0o774)
+        shutil.chown(train_dir_from_args, group='just_raigs')
         train_ds.save(train_dir_from_args)
-        os.makedirs(val_dir_from_args, exist_ok=True)
+        os.makedirs(val_dir_from_args, exist_ok=True, mode=0o774)
+        shutil.chown(val_dir_from_args, group='just_raigs')
         val_ds.save(val_dir_from_args)
-        os.makedirs(test_dir_from_args, exist_ok=True)
+        os.makedirs(test_dir_from_args, exist_ok=True, mode=0o774)
+        shutil.chown(test_dir_from_args, group='just_raigs')
         test_ds.save(test_dir_from_args)
     '''
     Batch the datasets:
@@ -211,6 +215,6 @@ def load_datasets(
 if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(64, 64), interpolation='nearest', keep_aspect_ratio=False, num_partitions=6,
-        batch_size=32, num_images=None, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
+        color_mode='rgb', target_size=(64, 64), interpolation='nearest', keep_aspect_ratio=False, num_partitions=1,
+        batch_size=32, num_images=50, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
     )
