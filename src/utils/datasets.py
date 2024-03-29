@@ -53,8 +53,9 @@ def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
 
 def load_datasets(
         color_mode: str, target_size: Optional[Tuple[int, int]], interpolation: str, keep_aspect_ratio: bool,
-        num_partitions: int, batch_size: int, num_images: Optional[int] = None, train_set_size: Optional[float] = 0.6,
-        val_set_size: Optional[float] = 0.2, test_set_size: Optional[float] = 0.2, seed: Optional[int] = 42) -> [Dataset, Dataset, Dataset]:
+        num_partitions: int, batch_size: int, oversample_train_set: bool, oversample_val_set: bool,
+        num_images: Optional[int] = None, train_set_size: Optional[float] = 0.6, val_set_size: Optional[float] = 0.2,
+        test_set_size: Optional[float] = 0.2, seed: Optional[int] = 42) -> [Dataset, Dataset, Dataset]:
     """
     Constructs TensorFlow train, val, test :class:`~tensorflow.data.Dataset` s from the provided high resolution image
     training set.
@@ -72,6 +73,12 @@ def load_datasets(
         num_partitions (int): An integer value representing the number of partitioned training sets to load in. The
           maximum value is ``6`` (Train_0 - Train_5), the minimum value is ``1`` (Train_0 only).
         batch_size (int): The batch size to use for the training, validation, and testing datasets.
+        oversample_train_set (bool): A boolean flag indicating if the training set should be oversampled from the least
+          prominent class such that 50% of examples in each batch belong to the positive class and 50% belong to the
+          negative class. Note that this assumes a binary classification problem.
+        oversample_val_set (bool): A boolean flag indicating if the validation set should be oversampled from the least
+          prominent class such that 50% of examples in each batch belong to the positive class and 50% belong to the
+          negative class. Note that this assumes a binary classification problem.
         num_images (Optional[int]): The exact number of images to load from the training set. This value takes
           precedence over the specified number of partitions. However, if both ``num_partitions`` and ``num_images`` are
           specified then at most ``num_images`` will be loaded from the subset of partitions specified by
@@ -103,9 +110,15 @@ def load_datasets(
     val_dir_from_args = os.path.join(dirname_from_args, 'val')
     test_dir_from_args = os.path.join(dirname_from_args, 'test')
     if os.path.isdir(train_dir_from_args) and os.path.isdir(val_dir_from_args) and os.path.isdir(test_dir_from_args):
-        logger.debug("Found existing saved dataset for the specified arguments! Loading tf datasets from disk.")
+        logger.debug(f"Found existing saved dataset for the specified arguments! Loading tf.Datasets from: {dirname_from_args}.")
         train_ds = tf.data.Dataset.load(train_dir_from_args)
+        if oversample_train_set:
+            logger.debug(f"Oversampling training dataset.")
+            get_oversampled_dataset(data=train_ds, batch_size=batch_size, seed=seed)
         val_ds = tf.data.Dataset.load(val_dir_from_args)
+        if oversample_val_set:
+            logger.debug(f"Oversampling validation dataset.")
+            get_oversampled_dataset(data=val_ds, batch_size=batch_size, seed=seed)
         test_ds = tf.data.Dataset.load(test_dir_from_args)
     else:
         logger.debug("No saved datasets found, loading in the data from scratch.")
@@ -117,10 +130,19 @@ def load_datasets(
         image_paths_df = pd.DataFrame()
         assert num_partitions <= 6, f"num_partitions must be less than or equal to 6, got {num_partitions}"
         assert num_partitions > 0, f"num_partitions must be greater than 0, got {num_partitions}"
+        reached_image_count = False
         for i in range(num_partitions):
             train_set_partition_abs_path = os.path.join(high_res_train_data_path, f"{i}")
+            if reached_image_count:
+                break
             for root, dirs, files in os.walk(train_set_partition_abs_path):
+                if reached_image_count:
+                    break
                 for file_id, file in enumerate(files):
+                    if num_images is not None:
+                        if file_id == num_images:
+                            reached_image_count = True
+                            break
                     train_image_abs_file_path = os.path.join(root, file)
                     train_image_abs_file_paths.append(os.path.join(root, file))
                     image_paths_df = image_paths_df.append(
@@ -129,14 +151,11 @@ def load_datasets(
                             'Eye ID': file.split('.')[0]
                         }, ignore_index=True
                     )
-                    if num_images is not None:
-                        if file_id == num_images:
-                            break
         # Modify the DataFrame to contain the absolute path to the 'Eye ID' training image:
         train_data_labels_df = train_data_labels_df.merge(image_paths_df, on=['Eye ID'], how='outer')
         del image_paths_df
         # Convert 'NRG' = 0 and 'RG' = 1
-        final_label_int_mask = train_data_labels_df['Final Label'] == 'RG'
+        final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
         train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
         # Drop rows with NaN absolute file paths:
         train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
@@ -147,7 +166,7 @@ def load_datasets(
         )
         logger.debug(f"train_ds_df.shape: {train_ds_df.shape}")
         val_ds_df, test_ds_df = train_test_split(
-            val_ds_df, train_size=val_set_size, test_size=test_set_size, shuffle=False
+            val_ds_df, train_size=0.5, test_size=0.5, shuffle=False
         )
         logger.debug(f"val_ds_df.shape: {val_ds_df.shape}")
         logger.debug(f"test_ds_df.shape: {test_ds_df.shape}")
@@ -191,9 +210,6 @@ def load_datasets(
         )
         del test_ds_df
         del test_img_and_labels_df
-        # Oversample the training and validation datasets:
-        train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
-        val_ds = get_oversampled_dataset(val_ds, batch_size=batch_size, seed=seed)
         # Save the datasets to disk:
         os.makedirs(train_dir_from_args, exist_ok=True, mode=0o774)
         shutil.chown(train_dir_from_args, group='just_raigs')
@@ -204,6 +220,13 @@ def load_datasets(
         os.makedirs(test_dir_from_args, exist_ok=True, mode=0o774)
         shutil.chown(test_dir_from_args, group='just_raigs')
         test_ds.save(test_dir_from_args)
+        # Oversample the training and validation datasets:
+        if oversample_train_set:
+            logger.debug(f"Oversampling training dataset.")
+            train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
+        if oversample_val_set:
+            logger.debug(f"Oversampling validation dataset.")
+            val_ds = get_oversampled_dataset(val_ds, batch_size=batch_size, seed=seed)
     '''
     Batch the datasets:
     '''
@@ -241,13 +264,18 @@ def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int]
     negative_referral_data = data.filter(lambda x, y: tf.math.equal(y, 0))
     positive_referral_data = data.filter(lambda x, y: tf.math.equal(y, 1))
 
-    pos_len = len(list(positive_referral_data))
+    pos_len = positive_referral_data.reduce(0, lambda x, _: x + 1).numpy()
     # logger.debug(f"pos_len: {pos_len}")
-    neg_len = len(list(negative_referral_data))
+    neg_len = negative_referral_data.reduce(0, lambda x, _ : x + 1).numpy()
     # logger.debug(f"neg_len: {neg_len}")
     if pos_len == 0 or neg_len == 0:
         logger.warning("One of the classes is empty. No oversampling will be performed.")
         return data
+    if pos_len == neg_len:
+        logger.warning(f"Dataset already balanced, will not be oversampled again.")
+        return data
+    logger.debug(f"Cardinality of positive class dataset: {pos_len}")
+    logger.debug(f"Cardinality of negative class dataset: {neg_len}")
     shorter_ds = positive_referral_data
     shorter_length = pos_len
     longer_ds = negative_referral_data
@@ -272,6 +300,7 @@ def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int]
 if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(64, 64), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=6,
-        batch_size=32, num_images=None, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
+        color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=6,
+        batch_size=32, num_images=None, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42,
+        oversample_train_set=True, oversample_val_set=True
     )
