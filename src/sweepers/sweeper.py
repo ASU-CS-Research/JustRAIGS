@@ -6,7 +6,9 @@ from wandb.integration.keras import WandbCallback
 import wandb as wab
 import wandb.util
 from wandb.sdk.wandb_config import Config
-from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel
+import json
+from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel, CVAEFeatureExtractorHyperModel, \
+    flatten_hyperparameters
 from src.utils.datasets import load_datasets
 
 
@@ -34,64 +36,6 @@ def main():
         - To learn more about how to configure the sweep, checkout: https://docs.wandb.ai/guides/sweeps/configuration
 
     """
-    # Note: Do not use the keras object for the optimizer (e.g. Adam(learning_rate=0.001) instead of 'adam')
-    # or you get a RuntimeError('Should only create a single instance of _DefaultDistributionStrategy.') this may be a
-    # WaB bug which will be addressed in future updates.
-    hyperparameters = {
-        'num_epochs': {
-            'value': 100,
-            # 'values': [10, 20, 30]
-        },
-        'loss': {
-            'value': 'binary_crossentropy'
-        },
-        'conv_layer_activation_function': {
-            'value': 'tanh'
-        },
-        'kernel_size': {
-            'value': 11,
-        },
-        'num_nodes_conv_1': {
-            'value': 2**3
-        },
-        'num_nodes_conv_2': {
-            'value': 2**0
-        },
-        'optimizer': {
-            'parameters': {
-                'type': {
-                    'value': 'adam',
-                    # 'values': ['adam', 'sgd', 'rmsprop']
-                },
-                'learning_rate': {
-                    'value': 0.001,
-                    # 'values': [0.001, 0.01, 0.1]
-                }
-            }
-        },
-        'inference_target_conv_layer_name': {
-            'values': ['conv_2d_2']
-        },
-        # For transfer learning:
-        'num_thawed_layers': {
-            'value': 2
-        }
-    }
-    sweep_configuration = {
-        'method': 'grid',   # 'method': 'random'
-        'project': 'JustRAIGS',
-        'entity': 'appmais',
-        'metric': {
-            'name': 'val_loss',
-            'goal': 'minimize'
-        },
-        # 'early_terminate': {
-        #     'type': 'hyperband',
-        #     'min_iter': 3
-        # }
-        'parameters': hyperparameters
-    }
-    sweep_id = wab.sweep(sweep=sweep_configuration, project='JustRAIGS', entity='appmais')
     '''
     Initialize TensorFlow datasets:
     '''
@@ -103,6 +47,9 @@ def main():
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep: 
     '''
+    # '''
+    # For standard classification tasks:
+    # '''
     # Construct WaB HyperModel:
     # hypermodel = WaBHyperModel(
     #     train_ds=train_ds,
@@ -131,6 +78,71 @@ def main():
             tf.keras.metrics.FalseNegatives()
         ]
     )
+
+    # '''
+    # For Transfer Learning with InceptionV3:
+    # '''
+    # hypermodel = InceptionV3WaBHyperModel(
+    #     train_ds=train_ds,
+    #     val_ds=val_ds,
+    #     test_ds=test_ds,
+    #     num_classes=NUM_CLASSES,
+    #     training=True,
+    #     batch_size=BATCH_SIZE,
+    #     metrics=[
+    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+    #         tf.keras.metrics.FalseNegatives()
+    #     ]
+    # )
+
+    # '''
+    # For Feature Extraction with a CVAE:
+    # '''
+    # hypermodel = CVAEFeatureExtractorHyperModel(
+    #     train_ds=train_ds,
+    #     val_ds=val_ds,
+    #     test_ds=test_ds,
+    #     num_classes=NUM_CLASSES,
+    #     training=True,
+    #     batch_size=BATCH_SIZE,
+    #     metrics=[
+    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+    #         tf.keras.metrics.FalseNegatives()
+    #     ]
+    # )
+    '''
+    Initialize the sweep configuration:
+    '''
+    # Note: Do not use the keras object for the optimizer (e.g. Adam(learning_rate=0.001) instead of 'adam')
+    # or you get a RuntimeError('Should only create a single instance of _DefaultDistributionStrategy.') this may be a
+    # WaB bug which will be addressed in future updates.
+    assert os.path.exists(HPARAM_JSON_PATH), f"Hyperparameter JSON file not found at: {HPARAM_JSON_PATH}"
+    # Load hparams.json:
+    with open(HPARAM_JSON_PATH, 'r') as fp:
+        hyperparameters = json.load(fp=fp)
+    # Remove unnecessary parameters (as defined by the model attributes):
+    hyperparameters = flatten_hyperparameters(
+        hyperparameters, model_name=hypermodel.hyper_model_name, model_type=hypermodel.hyper_model_type
+    )
+    # Add to the sweep configuration:
+    sweep_configuration = {
+        'method': 'grid',   # 'method': 'random'
+        'project': 'JustRAIGS',
+        'entity': 'appmais',
+        'metric': {
+            'name': 'val_loss',
+            'goal': 'minimize'
+        },
+        # 'early_terminate': {
+        #     'type': 'hyperband',
+        #     'min_iter': 3
+        # }
+        'parameters': hyperparameters
+    }
+    sweep_id = wab.sweep(sweep=sweep_configuration, project='JustRAIGS', entity='appmais')
+
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
@@ -156,8 +168,10 @@ if __name__ == '__main__':
     if not os.path.exists(LOCAL_DATA_DIR):
         os.makedirs(LOCAL_DATA_DIR)
     DATA_DIR = '/usr/local/data/JustRAIGS/raw/'
+    HPARAM_JSON_PATH = os.path.join(REPO_ROOT_DIR, 'src/sweepers/hparams.json')
     logger.debug(f"WANDB_DIR: {LOG_DIR}")
     logger.debug(f"LOCAL_DATA_DIR: {LOCAL_DATA_DIR}")
     logger.debug(f"DATA_DIR: {DATA_DIR}")
+    logger.debug(f"HPARAM_JSON_PATH: {HPARAM_JSON_PATH}")
     tf.random.set_seed(seed=SEED)
     main()
