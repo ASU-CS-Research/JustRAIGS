@@ -87,6 +87,32 @@
   },
   "binary_classification": {
     "parameters": {
+      "WaBHyperModel": {
+        "parameters": {
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.001
+              }
+            }
+          },
+          "kernel_size": {
+            "value": 11
+          },
+          "num_nodes_conv_1": {
+            "values": [2, 4]
+          },
+          "num_nodes_conv_2": {
+            "value": 2
+          },
+          "conv_layer_activation_function": {
+            "value": "relu"
+          }
+        }
+      },
       "InceptionV3": {
         "parameters": {
           "input_shape": {

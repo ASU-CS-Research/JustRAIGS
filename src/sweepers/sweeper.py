@@ -51,24 +51,7 @@ def main():
     For standard classification tasks:
     '''
     # Construct WaB HyperModel:
-    # hypermodel = WaBHyperModel(
-    #     train_ds=train_ds,
-    #     val_ds=val_ds,
-    #     test_ds=test_ds,
-    #     num_classes=NUM_CLASSES,
-    #     training=True,
-    #     batch_size=BATCH_SIZE,
-    #     metrics=[
-    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-    #         tf.keras.metrics.FalseNegatives()
-    #     ]
-    # )
-
-    # '''
-    # For Transfer Learning with InceptionV3:
-    # '''
-    hypermodel = InceptionV3WaBHyperModel(
+    hypermodel = WaBHyperModel(
         train_ds=train_ds,
         val_ds=val_ds,
         test_ds=test_ds,
@@ -81,6 +64,23 @@ def main():
             tf.keras.metrics.FalseNegatives()
         ]
     )
+
+    # '''
+    # For Transfer Learning with InceptionV3:
+    # '''
+    # hypermodel = InceptionV3WaBHyperModel(
+    #     train_ds=train_ds,
+    #     val_ds=val_ds,
+    #     test_ds=test_ds,
+    #     num_classes=NUM_CLASSES,
+    #     training=True,
+    #     batch_size=BATCH_SIZE,
+    #     metrics=[
+    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+    #         tf.keras.metrics.FalseNegatives()
+    #     ]
+    # )
 
     # '''
     # For Feature Extraction with a CVAE:
@@ -110,7 +110,7 @@ def main():
         hyperparameters = json.load(fp=fp)
     # Remove unnecessary parameters (as defined by the model attributes):
     hyperparameters = flatten_hyperparameters(
-        hyperparameters, model_name=hypermodel.model_name, model_type=hypermodel.model_type
+        hyperparameters, model_name=hypermodel.hyper_model_name, model_type=hypermodel.hyper_model_type
     )
     # Add to the sweep configuration:
     sweep_configuration = {

@@ -45,7 +45,8 @@ class WaBHyperModel:
     """
     def __init__(
             self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
-            batch_size: int, metrics: List[Metric], wab_config_defaults: Optional[Dict[str, Any]] = None):
+            batch_size: int, metrics: List[Metric], wab_config_defaults: Optional[Dict[str, Any]] = None,
+            hyper_model_name: Optional[str] = 'WaBHyperModel'):
         """
 
         Args:
@@ -63,6 +64,10 @@ class WaBHyperModel:
             metrics (List[Metric]): A list of metrics to be used to evaluate the model.
             wab_config_defaults (Optional[Dict[str, Any]]): A dictionary containing the default configuration for the
               Weights and Biases sweep configuration object.
+            hyper_model_name (Optional[str]): Defaults to ``'WaBHyperModel'``. The name of the hyper model utilized by
+              the :meth:`~src.hypermodels.hypermodels.flatten_hyperparameters` method to subset the hyperparameter
+              search space for the WaB Sweeper agent.
+
         """
         self._train_ds = train_ds
         logger.debug(f"train_ds.element_spec: {train_ds.element_spec}")
@@ -89,6 +94,20 @@ class WaBHyperModel:
         # logger.info(f"wab_sweep_config_defaults (post-init): {self._wab_config_defaults}")
         # Group name for the Weights and Biases sweep:
         self._wab_group_name = f"{wab.util.generate_id()}"
+        self._hyper_model_name = hyper_model_name
+        self._hyper_model_type = ModelType.BINARY_CLASSIFICATION if num_classes == 2 else ModelType.MULTICLASS_CLASSIFICATION
+
+    @property
+    def hyper_model_type(self):
+        return self._hyper_model_type
+
+    @property
+    def hyper_model_name(self) -> str:
+        return self._hyper_model_name
+
+    @hyper_model_name.setter
+    def hyper_model_name(self, hyper_model_name: str):
+        self._hyper_model_name = hyper_model_name
 
     def construct_model_run_trial(self):
         """
@@ -235,18 +254,11 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
     """
 
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
-                 batch_size: int, metrics: List[Metric]):
-        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics)
-        self._model_name = 'InceptionV3'
-        self._model_type = ModelType.BINARY_CLASSIFICATION if num_classes == 2 else ModelType.MULTICLASS_CLASSIFICATION
-
-    @property
-    def model_name(self):
-        return self._model_name
-
-    @property
-    def model_type(self):
-        return self._model_type
+                 batch_size: int, metrics: List[Metric], hyper_model_name: Optional[str] = "InceptionV3"):
+        super().__init__(
+            train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name=hyper_model_name
+        )
+        self._hyper_model_type = ModelType.BINARY_CLASSIFICATION if num_classes == 2 else ModelType.MULTICLASS_CLASSIFICATION
 
     def construct_model_run_trial(self):
         """
@@ -332,6 +344,11 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
     class is responsible for constructing unique instances of the :class:`~src.models.models.CVAEFeatureExtractorWaBModel`
     for each trial (unique set of hyperparameters) and training the model that performs feature extraction.
     """
+    def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
+                 batch_size: int, metrics: List[Metric], hyper_model_name: Optional[str] = "CVAEFeatureExtractorHyperModel"):
+        super().__init__(
+            train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name=hyper_model_name
+        )
 
     def construct_model_run_trial(self):
         """
@@ -429,7 +446,7 @@ def exc_handler(exc_type, exc, tb):
 def flatten_hyperparameters(hyperparameters: Config, model_name: str, model_type: ModelType) -> Dict[str, Any]:
     """
     This method is responsible for flattening the hyperparameters specified in the sweep configuration into a single
-    dictionary, for convenience's sake. This method expects a wandb_config dictionary laid out like so:
+    dictionary, for convenience's sake. This method expects a wandb_config dictionary laid out like so::
     {
         'global': {
             'parameters': {
@@ -457,6 +474,7 @@ def flatten_hyperparameters(hyperparameters: Config, model_name: str, model_type
             }
         }
     }
+
     Args:
         hyperparameters (Dict[str, Any]): Configuration
         model_name (str):
@@ -476,7 +494,11 @@ def flatten_hyperparameters(hyperparameters: Config, model_name: str, model_type
     # Extract the global hyperparameters:
     global_hyperparameters = hyperparameters['global']['parameters'][model_type.value]
     # Extract the model specific hyperparameters:
-    model_specific_hyperparameters = hyperparameters[model_type.value]['parameters'][model_name]
+    try:
+        model_specific_hyperparameters = hyperparameters[model_type.value]['parameters'][model_name]
+    except KeyError as err:
+        logger.error(f"Missing model \'{model_name}\' from the \'{model_type.value}\' section of \'hparams.json\'")
+        exit(1)
     # Flatten the hyperparameters:
     flattened_hyperparameters.update(global_hyperparameters['parameters'])
     flattened_hyperparameters.update(model_specific_hyperparameters['parameters'])
