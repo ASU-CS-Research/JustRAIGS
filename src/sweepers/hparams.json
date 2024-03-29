@@ -1,0 +1,275 @@
+{
+  "global": {
+    "parameters": {
+      "binary_classification": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "num_classes": {
+            "value": 2
+          },
+          "loss": {
+            "value": "binary_crossentropy"
+          },
+          "num_epochs": {
+            "value": 10
+          },
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.001
+              }
+            }
+          }
+        }
+      },
+      "multiclass_classification": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "num_classes": {
+            "value": 10
+          },
+          "loss": {
+            "value": "crossentropy"
+          },
+          "num_epochs": {
+            "value": 100
+          }
+        }
+      },
+      "feature_extraction": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "num_epochs": {
+            "value": 100
+          }
+        }
+      }
+    }
+  },
+  "binary_classification": {
+    "parameters": {
+      "WaBHyperModel": {
+        "parameters": {
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.001
+              }
+            }
+          },
+          "kernel_size": {
+            "value": 11
+          },
+          "num_nodes_conv_1": {
+            "values": [2, 4]
+          },
+          "num_nodes_conv_2": {
+            "value": 2
+          },
+          "conv_layer_activation_function": {
+            "value": "relu"
+          }
+        }
+      },
+      "InceptionV3": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "num_thawed_layers": {
+            "value": 2
+          },
+          "loss": {
+            "value": "binary_crossentropy"
+          },
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.001
+              }
+            }
+          }
+        }
+      },
+      "EfficientNetB0": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "num_thawed_layers": {
+            "value": 2
+          },
+          "loss": {
+            "value": "binary_crossentropy"
+          }
+        }
+      }
+    }
+  },
+  "multiclass_classification": {
+    "parameters": {
+      "InceptionV3": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "num_thawed_layers": {
+            "value": 2
+          },
+          "loss": {
+            "value": "crossentropy"
+          },
+          "kernel_size": {
+            "value": 11
+          }
+        }
+      },
+      "EfficientNetB0": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "num_thawed_layers": {
+            "value": null
+          },
+          "loss": {
+            "value": "crossentropy"
+          }
+        }
+      }
+    }
+  },
+  "feature_extraction": {
+    "parameters": {
+      "CVAE": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "latent_dim": {
+            "value": 2
+          }
+        }
+      },
+      "PCA": {
+        "parameters": {
+          "input_shape": {
+            "parameters": {
+              "width_px": {
+                "value": 64
+              },
+              "height_px": {
+                "value": 64
+              },
+              "channels": {
+                "value": 3
+              }
+            }
+          },
+          "n_components": {
+            "values": [
+              2,
+              4,
+              8
+            ]
+          }
+        }
+      }
+    }
+  }
+}
