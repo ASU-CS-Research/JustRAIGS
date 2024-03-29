@@ -215,6 +215,6 @@ def load_datasets(
 if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(64, 64), interpolation='nearest', keep_aspect_ratio=False, num_partitions=1,
-        batch_size=32, num_images=50, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
+        color_mode='rgb', target_size=(64, 64), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=6,
+        batch_size=32, num_images=None, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42
     )
