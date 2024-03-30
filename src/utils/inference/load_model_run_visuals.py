@@ -47,7 +47,7 @@ if __name__ == '__main__':
     train_ds, val_ds, test_ds = load_datasets(
         color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
-        num_images=50
+        num_images=50, oversample_train_set=True, oversample_val_set=True
     )
     # Use the trained model to issue predictions on the validation set (images it did not see during training):
     num_correct_predictions = 0

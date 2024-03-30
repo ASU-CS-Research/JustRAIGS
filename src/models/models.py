@@ -1,5 +1,5 @@
 from contextlib import redirect_stdout
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Union
 import numpy as np
 import tensorflow as tf
 from keras.applications import EfficientNetB7
@@ -13,6 +13,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 from tensorflow.keras.losses import BinaryCrossentropy
 import wandb as wab
+import matplotlib.pyplot as plt
+import time
 
 
 @tf.keras.utils.register_keras_serializable(name='WaBModel')
@@ -336,3 +338,280 @@ class EfficientNetB7WaBModel(Model):
                            f"un-deserializable model.")
         else:
             logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")
+
+
+
+
+class CVAEWaBModel(Model):
+    """
+    A Convolutional Variational Autoencoder (CVAE) model that is intended to be used as a feature extractor on the raw
+    high-dimensional input images. This model is part of the demo pipeline for performing feature extraction prior to
+    classification within the WaB framework.
+
+    See Also:
+        - https://www.tensorflow.org/tutorials/generative/cvae
+        - https://www.tensorflow.org/guide/keras/making_new_layers_and_models_via_subclassing#putting_it_all_together_an_end-to-end_example
+
+    """
+
+    def __init__(
+            self, wab_trial_run: Optional[Run], trial_hyperparameters: Config, batch_size: int,
+            input_shape: Tuple[int, int, int], num_classes: int, *args, **kwargs):
+        """
+
+        .. todo:: Remove duplicate code by subclassing from a common WaBModel base class.
+
+        .. todo:: Add additional utility methods to this class from: https://www.tensorflow.org/tutorials/generative/cvae
+
+        Args:
+            wab_trial_run (Optional[Run]): The WaB run object that is responsible for logging the results of the current
+              trial. Used to log output to the same namespaced location in WaB. Note that this parameter is optional in
+              the event that the model is being loaded from a saved model format (e.g. h5) in which case the user may
+              not wish to log metrics to the same trial as the one that generated the saved model. During training it is
+              expected that this value is not ``None``.
+            trial_hyperparameters (Config): The hyperparameters for this particular trial. These are provided by the WaB
+              agent that is driving the sweep as a subset of the total hyperparameter search space.
+            batch_size (int): The batch size to use for the training model.
+            input_shape (Tuple[int, int, int]): The shape of the input tensor WITHOUT the batch dimension (that means no
+              leading batch dimension integer and no leading ``None`` placeholder Tensor).
+            num_classes (int): The number of classes in the classification task, used to construct the output layer of
+              the model and decide whether to use sigmoid or softmax.
+            *args: Variable length argument list to pass through to the :class:`keras.Model` superclass constructor.
+            **kwargs: Arbitrary keyword arguments to pass through to the :class:`keras.Model` superclass constructor.
+
+        """
+        self._wab_trial_run = wab_trial_run
+        super().__init__(*args, **kwargs)
+        self._trial_hyperparameters = trial_hyperparameters
+        self._batch_size = batch_size
+        self._input_shape_no_batch = input_shape
+        self._num_classes = num_classes
+        '''
+        Build the model with the hyperparameters for this particular trial:
+        '''
+        # Ensure the necessary hyperparameters are present in the search space:
+        if 'optimizer' not in self._trial_hyperparameters:
+            raise ValueError(f"Optimizer not found in trial hyperparameters: {self._trial_hyperparameters}")
+        if 'feature_extraction' not in self._trial_hyperparameters:
+            raise ValueError(f"Feature extraction not found in trial hyperparameters: {self._trial_hyperparameters}")
+        # Parse Optimizer:
+        optimizer_config = self._trial_hyperparameters['optimizer']
+        optimizer_type = optimizer_config['type']
+        optimizer_learning_rate = optimizer_config['learning_rate']
+        if optimizer_type == 'adam':
+            self._optimizer = Adam(learning_rate=optimizer_learning_rate)
+        else:
+            self._optimizer = None
+            logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
+                         f"sweep configuration.")
+            exit(1)
+        # Parse Feature Extraction hyperparameters:
+        feature_extraction_config = self._trial_hyperparameters['feature_extraction']
+        if 'latent_dim' in feature_extraction_config:
+            self._latent_dim = feature_extraction_config['latent_dim']
+        else:
+            raise ValueError(f"latent_dim not found in trial hyperparameters: {self._trial_hyperparameters}")
+        if 'loss' in feature_extraction_config:
+            loss = feature_extraction_config['loss']
+            if loss == 'mean':
+                self._loss = tf.keras.metrics.Mean()
+            else:
+                raise ValueError(f"Unknown loss function: {loss} provided in the hyperparameter section of the sweep "
+                                 f"configuration.")
+        else:
+            raise ValueError(f"Loss function not found in trial hyperparameters for feature extraction: "
+                             f"{self._trial_hyperparameters}")
+        self._encoder = Sequential([
+            # ..todo:: Dynamic input shape:
+            tf.keras.layers.InputLayer(input_shape=(28, 28, 1)),
+            tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation='relu'),
+            tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation='relu'),
+            tf.keras.layers.Flatten(),
+            # No activation
+            tf.keras.layers.Dense(self._latent_dim + self._latent_dim)
+        ])
+        self._decoder = Sequential([
+            tf.keras.layers.InputLayer(input_shape=(self._latent_dim,)),
+            tf.keras.layers.Dense(units=7 * 7 * 32, activation=tf.nn.relu),
+            tf.keras.layers.Reshape(target_shape=(7, 7, 32)),
+            tf.keras.layers.Conv2DTranspose(
+                filters=64, kernel_size=3, strides=2, padding='same', activation='relu'
+            ),
+            tf.keras.layers.Conv2DTranspose(
+                filters=32, kernel_size=3, strides=2, padding='same', activation='relu'
+            ),
+            # No activation
+            tf.keras.layers.Conv2DTranspose(
+                filters=1, kernel_size=3, strides=1, padding='same'
+            )
+        ])
+
+    @tf.function
+    def sample(self, eps: Optional[tf.Tensor] = None) -> tf.Tensor:
+        """
+        Sample the latent embedding space to generate a sample for the decoder.
+
+        Args:
+            eps (Optional[float]): Epsilon constant in the equation `z = mu + sigma * epsilon`. If None, then a random
+              epsilon is sampled from a standard normal distribution the size of the latent representation.
+
+        """
+        if eps is None:
+            eps = tf.random.normal(shape=(100, self._latent_dim))
+        return self.decode(eps, apply_sigmoid=True)
+
+    def encode(self, x: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+        """
+        Encode the input tensor into a latent representation.
+
+        Args:
+            x (:class:`~tensorflow.Tensor`): The input tensor to encode into a latent representation.
+
+        """
+        mean, logvar = tf.split(self._encoder(x), num_or_size_splits=2, axis=1)
+        return mean, logvar
+
+    def reparameterize(self, mean: tf.Tensor, logvar: tf.Tensor) -> tf.Tensor:
+        """
+        Re-parameterize the latent representation to sample from the distribution specified by the provided ``mean`` and
+        log of the variance ``logvar``.
+
+        Args:
+            mean (:class:`~tensorflow.Tensor`): The mean of the distribution.
+            logvar (:class:`~tensorflow.Tensor`): The log variance of the distribution.
+
+        """
+        eps = tf.random.normal(shape=mean.shape)
+        return eps * tf.exp(logvar * .5) + mean
+
+    def decode(self, z: tf.Tensor, apply_sigmoid: bool = False) -> tf.Tensor:
+        """
+        Decode the latent representation into a reconstructed input tensor.
+
+        Args:
+            z (:class:`~tensorflow.Tensor`): The latent representation to decode.
+            apply_sigmoid (bool): Whether to apply the sigmoid function to the output tensor.
+
+        """
+        logits = self._decoder(z)
+        if apply_sigmoid:
+            probs = tf.sigmoid(logits)
+            return probs
+        return logits
+
+    def log_normal_pdf(self, sample: tf.Tensor, mean: Union[tf.Tensor, float], logvar: Union[tf.Tensor, float], raxis: Optional[int] = 1) -> tf.Tensor:
+        """
+        Compute the log probability density function of the normal distribution.
+
+        Args:
+            sample (:class:`~tensorflow.Tensor`): The sample to compute the log probability density function for.
+            mean (:class:`~tensorflow.Tensor`): The mean of the normal distribution.
+            logvar (:class:`~tensorflow.Tensor`): The log variance of the normal distribution.
+            raxis (Optional[int]): The axis to reduce over, defaults to axis ``1`` if not provided.
+
+        """
+        log2pi = tf.math.log(2. * np.pi)
+        return tf.reduce_sum(-.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi), axis=raxis)
+
+    def compute_loss(self, x: tf.Tensor) -> tf.Tensor:
+        """
+        Compute the loss for the CVAE model. This is the Monte Carlo estimate of the negative evidence lower bound
+        (ELBO).
+
+        .. todo:: Docstring.
+
+        """
+        logger.debug(f"compute_loss for x.shape: {x.shape}")
+        mean, logvar = self.encode(x)
+        logger.debug(f"mean.shape, logvar.shape: {mean.shape}, {logvar.shape}")
+        z = self.reparameterize(mean, logvar)
+        x_logit = self.decode(z)
+        cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=x)
+        logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
+        logpz = self.log_normal_pdf(z, 0., 0.)
+        logqz_x = self.log_normal_pdf(z, mean, logvar)
+        loss = -tf.reduce_mean(logpx_z + logpz - logqz_x)
+        return loss
+
+    @tf.function
+    def train_step(self, x: tf.Tensor) -> tf.Tensor:
+        """
+        A single training step for the CVAE model.
+
+        Args:
+            x (:class:`~tensorflow.Tensor`): The input tensor to train the model on.
+
+        Returns:
+           (:class:`~tensorflow.Tensor`): The loss for the current training step.
+
+        """
+        if type(x) is tuple:
+            image = x[0]
+            label = x[1]
+            # Prepend batch dimension:
+            # image = tf.reshape(image, (1,) + image.shape)
+        else:
+            image = x
+        # logger.debug(f"Training step image.shape: {image.shape}")
+        with tf.GradientTape() as tape:
+            train_loss = self.compute_loss(image)
+        gradients = tape.gradient(train_loss, self.trainable_variables)
+        # Gradient clipping to 5.0 for extremely large negative gradients:
+        # gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+        self._optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        return train_loss
+
+    def fit(
+            self, x, batch_size=None, epochs=1, verbose=1, callbacks=None, validation_split=0.0,
+            validation_data=None, shuffle=True, class_weight=None, sample_weight=None, initial_epoch=0,
+            steps_per_epoch=None, validation_steps=None, validation_batch_size=None, validation_freq=1,
+            max_queue_size=10, workers=1, use_multiprocessing=False):
+        """
+        See Also:
+            - https://www.tensorflow.org/tutorials/generative/cvae
+
+        """
+        logger.debug(f"Training model in .fit ...")
+        for i in range(1, epochs + 1):
+            start_time = time.time()
+            for train_image, train_label in x:
+                train_loss = self.train_step(train_image)
+                self._wab_trial_run.log({"loss": train_loss})
+                self._loss(train_loss)
+            train_elbo = -self._loss.result()
+            self._wab_trial_run.log({"ELBO": train_elbo})
+            end_time = time.time()
+            # Reset state for validation loss:
+            self._loss.reset_state()
+            for val_image, val_label in validation_data:
+                val_loss = self.compute_loss(val_image)
+                self._wab_trial_run.log({"val_loss": val_loss})
+                self._loss(val_loss)
+            val_elbo = -self._loss.result()
+            self._wab_trial_run.log({"val_ELBO": val_elbo})
+            print(f"Epoch: {i}, Train set ELBO: {train_elbo}, Validation set ELBO: {val_elbo}, time elapse for current epoch: {end_time - start_time}")
+
+    def call(self, inputs, training=None, mask=None):
+        """
+
+        """
+        logger.debug(f"inputs: {inputs}")
+        self.train_step(inputs)
+        # self._loss(self.compute_loss(inputs))
+        # elbo = -self._loss.result()
+        return
+
+    def generate_and_save_images(self, epoch: int, test_sample: tf.Tensor):
+        mean, logvar = self.encode(test_sample)
+        z = self.reparameterize(mean, logvar)
+        predictions = self.sample(z)
+        fig = plt.figure(figsize=(4, 4))
+
+        for i in range(predictions.shape[0]):
+            plt.subplot(4, 4, i + 1)
+            plt.imshow(predictions[i, :, :, 0], cmap='gray')
+            plt.axis('off')
+
+        # tight_layout minimizes the overlap between 2 sub-plots
+        plt.savefig(f'image_at_epoch_{epoch:04d}.png')
+        plt.show()
