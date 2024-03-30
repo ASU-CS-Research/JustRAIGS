@@ -29,6 +29,12 @@ def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
         **kwargs: Arbitrary keyword arguments. The inputs depend on the :class:`~pandas.DataFrame` object (or
           :class:`~pandas.Series`) that the :meth:`~pandas.DataFrame.apply` method is called on.
 
+    Within Args:
+        color_mode:
+        target_size:
+        interpolation:
+        keep_aspect_ratio:
+
     Returns:
         Tuple[tf.Tensor, tf.Tensor]: A tuple containing the image and its corresponding label.
 
@@ -43,6 +49,7 @@ def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
     target_size = args[2][1]
     interpolation = args[3][1]
     keep_aspect_ratio = args[4][1]
+    # logger.debug(f"load_img: {image_abs_path}")
     image = keras.utils.load_img(
         image_abs_path, color_mode=color_mode, target_size=target_size, interpolation=interpolation,
         keep_aspect_ratio=keep_aspect_ratio
@@ -246,7 +253,7 @@ def load_datasets(
 # def get_oversampled_dataset(dataset_split: DatasetSplit, split_ds_neg: Dataset, split_ds_pos: Dataset,
 #         split_ds_neg_files: Dataset, split_ds_pos_files: Dataset, batch_size: int, seed: int, weights: Optional[Tuple[float, float]] = (0.5, 0.5)):
 
-def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int] = 250) -> Dataset:
+def get_oversampled_dataset(data: Dataset, batch_size: int, seed: Optional[int] = 250) -> Dataset:
     """
     Oversamples the smaller class of the dataset to balance the class distribution.
 
@@ -293,14 +300,28 @@ def get_oversampled_dataset( data: Dataset, batch_size: int, seed: Optional[int]
     total_repeat = longer_ds.concatenate(shorter_repeat)
     total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
     # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
-    logger.debug("Successfully oversampled.")
+    num_examples = 0
+    num_positive_labels = 0
+    num_negative_labels = 0
+    for i, (image, image_label) in enumerate(total_repeat):
+        num_examples += 1
+        if tf.math.equal(image_label, 0):
+            # NGR = 0
+            num_negative_labels += 1
+        elif tf.math.equal(image_label, 1):
+            # GR = 1
+            num_positive_labels += 1
+    logger.debug(f"Cardinality of positive class in oversampled dataset: {num_positive_labels}")
+    logger.debug(f"Cardinality of negative class in oversampled dataset: {num_negative_labels}")
+    logger.debug(f"Cardinality of oversampled dataset: {num_examples}")
+    assert (num_examples == num_negative_labels + num_positive_labels)
     return total_repeat
 
 
 if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=6,
+        color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=1,
         batch_size=32, num_images=None, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42,
         oversample_train_set=True, oversample_val_set=True
     )

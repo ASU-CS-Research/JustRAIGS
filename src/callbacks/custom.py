@@ -71,7 +71,7 @@ class ConfusionMatrixCallback(Callback):
             labels = batch[1]
             y_true = np.concatenate((y_true, labels.numpy()))
             y_pred_batch = self.model.predict_on_batch(images).squeeze()
-            class_names_batch = np.array(['GR' if label.numpy() == 1 else 'NGR' for label in labels])
+            class_names_batch = np.array(['GR' if int(label.numpy()) == 1 else 'NGR' for label in labels])
             y_pred = np.concatenate((y_pred, y_pred_batch))
             class_names = np.concatenate((class_names, class_names_batch))
         y_pred = np.array([0 if pred <= 0.5 else 1 for pred in y_pred])

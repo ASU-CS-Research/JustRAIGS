@@ -44,7 +44,7 @@ def main():
         num_images=None, oversample_train_set=True, oversample_val_set=True
     )
     '''
-    Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep: 
+    Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep:
     '''
     # '''
     # For standard classification tasks:
