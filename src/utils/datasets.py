@@ -107,11 +107,14 @@ def load_datasets(
           A tuple containing the training, validation, and testing datasets.
 
     """
+    if is_multi:
+        if oversample_train_set or oversample_val_set:
+            raise NotImplementedError(f"Oversampling is not supported for multi-class classification.")
     data_root_dir = os.path.abspath('/usr/local/data/JustRAIGS/')
     # Check if this data has already been loaded and saved to disk:
     dirname_from_args = (f"{color_mode}_{target_size[0]}_{target_size[1]}_{interpolation}_{keep_aspect_ratio}_"
                          f"{num_partitions}_{num_images}_{train_set_size}_{val_set_size}_"
-                         f"{test_set_size}_{seed}")
+                         f"{test_set_size}_{seed}_{is_multi}")
     dirname_from_args = dirname_from_args.replace('.', '_')
     dirname_from_args = os.path.join(data_root_dir, 'interpolated', dirname_from_args)
     train_dir_from_args = os.path.join(dirname_from_args, 'train')
@@ -335,6 +338,6 @@ if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
     train_ds, val_ds, test_ds = load_datasets(
         color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=1,
-        batch_size=32, num_images=None, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42, is_multi=True,
-        oversample_train_set=True, oversample_val_set=True
+        batch_size=32, num_images=500, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42, is_multi=True,
+        oversample_train_set=False, oversample_val_set=False
     )

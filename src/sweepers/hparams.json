@@ -52,11 +52,21 @@
               }
             }
           },
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.001
+              }
+            }
+          },
           "num_classes": {
             "value": 10
           },
           "loss": {
-            "value": "crossentropy"
+            "value": "categorical_crossentropy"
           },
           "num_epochs": {
             "value": 100

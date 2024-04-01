@@ -11,6 +11,7 @@ from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel,
     flatten_hyperparameters
 from src.utils.datasets import load_datasets
 
+
 def main():
     """
     Main driver for the hyperparameter search. This function is responsible for initializing the sweep configuration,
@@ -41,7 +42,7 @@ def main():
     train_ds, val_ds, test_ds = load_datasets(
         color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
-        num_images=None, oversample_train_set=True, oversample_val_set=True
+        num_images=300, oversample_train_set=False, oversample_val_set=False, is_multi=True
     )
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep:
@@ -63,7 +64,10 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
-    # For Transfer Learning with InceptionV3:
+
+    '''
+    For Transfer Learning with InceptionV3:
+    '''
     hypermodel = InceptionV3WaBHyperModel(
         train_ds=train_ds,
         val_ds=val_ds,
@@ -77,23 +81,6 @@ def main():
             tf.keras.metrics.FalseNegatives()
         ]
     )
-
-    # '''
-    # For Transfer Learning with InceptionV3:
-    # '''
-    # hypermodel = InceptionV3WaBHyperModel(
-    #     train_ds=train_ds,
-    #     val_ds=val_ds,
-    #     test_ds=test_ds,
-    #     num_classes=NUM_CLASSES,
-    #     training=True,
-    #     batch_size=BATCH_SIZE,
-    #     metrics=[
-    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-    #         tf.keras.metrics.FalseNegatives()
-    #     ]
-    # )
 
     # '''
     # For Feature Extraction with a CVAE:
@@ -156,7 +143,7 @@ if __name__ == '__main__':
     """
     NUM_TRIALS = 10
     BATCH_SIZE = 16
-    NUM_CLASSES = 2
+    NUM_CLASSES = 10
     SEED = 42
     REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
     LOG_DIR = os.path.join(REPO_ROOT_DIR, 'logs')
