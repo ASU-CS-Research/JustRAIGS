@@ -123,13 +123,7 @@ def load_datasets(
     if os.path.isdir(train_dir_from_args) and os.path.isdir(val_dir_from_args) and os.path.isdir(test_dir_from_args):
         logger.debug(f"Found existing saved dataset for the specified arguments! Loading tf.Datasets from: {dirname_from_args}.")
         train_ds = tf.data.Dataset.load(train_dir_from_args)
-        if oversample_train_set:
-            logger.debug(f"Oversampling training dataset.")
-            get_oversampled_dataset(data=train_ds, batch_size=batch_size, seed=seed)
         val_ds = tf.data.Dataset.load(val_dir_from_args)
-        if oversample_val_set:
-            logger.debug(f"Oversampling validation dataset.")
-            get_oversampled_dataset(data=val_ds, batch_size=batch_size, seed=seed)
         test_ds = tf.data.Dataset.load(test_dir_from_args)
     else:
         logger.debug("No saved datasets found, loading in the data from scratch.")
@@ -178,7 +172,23 @@ def load_datasets(
             # train_data_labels_df["multihotG2"] = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
             # train_data_labels_df = train_data_labels_df.query("multihotG1 == multihotG2")
             train_data_labels_df["multihotG1"] = train_data_labels_df.filter(regex="G1 .*").to_numpy().tolist()
-            train_data_labels_df = train_data_labels_df.rename(columns={"multihotG1": "Class Label"})
+            train_data_labels_df["multihotG2"] = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
+            # Then we make a "multihot" column that is the element-wise logical OR of the two graders' labels.
+            train_data_labels_df["multihotG1"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG1"]]
+            train_data_labels_df["multihotG2"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG2"]]
+            train_data_labels_df["multihot"] = \
+                [np.logical_or(g1, g2) for g1, g2 in
+                 zip(train_data_labels_df["multihotG1"], train_data_labels_df["multihotG2"])]
+            # We also need sample weights that subtracts .05 from the weight of each sample if the two graders disagree.
+            train_data_labels_df["Sample Weights"] = [1] * train_data_labels_df.shape[0]
+            # count number of disagreements across the ten classes for each sample
+            train_data_labels_df["disagreements"] = \
+                [np.sum(np.logical_xor(g1, g2)) for g1, g2 in
+                 zip(train_data_labels_df["multihotG1"], train_data_labels_df["multihotG2"])]
+            # subtract .1 for each disagreement
+            train_data_labels_df["Sample Weights"] -= train_data_labels_df["disagreements"] * 0.1
+            train_data_labels_df = train_data_labels_df.rename(columns={"multihot": "Class Label"})
+            # train_data_labels_df = train_data_labels_df.rename(columns={"multihotG1": "Class Label"})
         # Convert 'NRG' = 0 and 'RG' = 1
         final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
         train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
@@ -245,13 +255,13 @@ def load_datasets(
         os.makedirs(test_dir_from_args, exist_ok=True, mode=0o774)
         shutil.chown(test_dir_from_args, group='just_raigs')
         test_ds.save(test_dir_from_args)
-        # Oversample the training and validation datasets:
-        if oversample_train_set:
-            logger.debug(f"Oversampling training dataset.")
-            train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
-        if oversample_val_set:
-            logger.debug(f"Oversampling validation dataset.")
-            val_ds = get_oversampled_dataset(val_ds, batch_size=batch_size, seed=seed)
+    # Oversample the training and validation datasets:
+    if oversample_train_set:
+        logger.debug(f"Oversampling training dataset.")
+        train_ds = get_oversampled_dataset(train_ds, batch_size=batch_size, seed=seed)
+    if oversample_val_set:
+        logger.debug(f"Oversampling validation dataset.")
+        val_ds = get_oversampled_dataset(val_ds, batch_size=batch_size, seed=seed)
     '''
     Batch the datasets:
     '''
