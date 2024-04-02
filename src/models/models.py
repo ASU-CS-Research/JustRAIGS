@@ -258,7 +258,7 @@ class InceptionV3WaBModel(Model):
             exit(1)
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
-        model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
+        model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
         self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
         # Build the model:
         self._model.build((None,) + self._input_shape_no_batch)

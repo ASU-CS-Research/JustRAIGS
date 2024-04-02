@@ -1,7 +1,7 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import keras
 import numpy as np
 import tensorflow as tf
@@ -17,7 +17,7 @@ class DatasetSplit(enum.Enum):
     TEST = 3
     TRAIN_AND_VALIDATION = 4
 
-def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
+def load_and_preprocess_image(*args, **kwargs) -> Tuple[Union[np.ndarray, float], int]:
     """
     Loads an image into a :class:`~numpy.ndarray` preprocess it, return the label as an :class:`int`.
 
@@ -50,10 +50,15 @@ def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
     interpolation = args[3][1]
     keep_aspect_ratio = args[4][1]
     # logger.debug(f"load_img: {image_abs_path}")
-    image = keras.utils.load_img(
-        image_abs_path, color_mode=color_mode, target_size=target_size, interpolation=interpolation,
-        keep_aspect_ratio=keep_aspect_ratio
-    )
+    try:
+        image = keras.utils.load_img(
+            image_abs_path, color_mode=color_mode, target_size=target_size, interpolation=interpolation,
+            keep_aspect_ratio=keep_aspect_ratio
+        )
+    except Exception as e:
+        logger.error(f"Failed to load image: {image_abs_path}")
+        logger.error(f"Error: {e}")
+        return float('nan'), image_int_label
     image = keras.utils.img_to_array(image)
     return image, image_int_label
 
@@ -189,9 +194,9 @@ def load_datasets(
             train_data_labels_df["Sample Weights"] -= train_data_labels_df["disagreements"] * 0.1
             train_data_labels_df = train_data_labels_df.rename(columns={"multihot": "Class Label"})
             # train_data_labels_df = train_data_labels_df.rename(columns={"multihotG1": "Class Label"})
-        # Convert 'NRG' = 0 and 'RG' = 1
-        final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
-        train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
+        # # Convert 'NRG' = 0 and 'RG' = 1
+        # final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
+        # train_data_labels_df['Final Label Int'] = np.where(final_label_int_mask, 0, 1)
         # Drop rows with NaN absolute file paths:
         train_data_labels_df = train_data_labels_df[train_data_labels_df['AbsPath'].notna()]
         # Train, Validation, and Testing set partitioning:
@@ -209,37 +214,41 @@ def load_datasets(
         At this point we have the dataframes partitioned into train, validation, and testing sets.
         Now we need to convert them to TensorFlow Datasets:
         '''
-        train_img_and_labels_df = train_ds_df[['AbsPath', 'Final Label Int']].apply(
+        train_img_and_labels_df = train_ds_df[['AbsPath', 'Class Label']].apply(
             load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
                 ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
                 ('keep_aspect_ratio', keep_aspect_ratio)
             )
         )
-        train_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        # Images that fail to load will be NaN, so we drop them:
+        train_img_and_labels_df = train_img_and_labels_df.dropna()
+        train_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Class Label': 'LabelTensor'}, inplace=True)
         train_ds = tf.data.Dataset.from_tensor_slices(
             (list(train_img_and_labels_df['NpImage']), list(train_img_and_labels_df['LabelTensor']))
         )
         del train_ds_df
         del train_img_and_labels_df
-        val_img_and_labels_df = val_ds_df[['AbsPath', 'Final Label Int']].apply(
+        val_img_and_labels_df = val_ds_df[['AbsPath', 'Class Label']].apply(
             load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
                 ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
                 ('keep_aspect_ratio', keep_aspect_ratio)
             )
         )
-        val_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        val_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Class Label': 'LabelTensor'}, inplace=True)
+        val_img_and_labels_df = val_img_and_labels_df.dropna()
         val_ds = tf.data.Dataset.from_tensor_slices(
             (list(val_img_and_labels_df['NpImage']), list(val_img_and_labels_df['LabelTensor']))
         )
         del val_ds_df
         del val_img_and_labels_df
-        test_img_and_labels_df = test_ds_df[['AbsPath', 'Final Label Int']].apply(
+        test_img_and_labels_df = test_ds_df[['AbsPath', 'Class Label']].apply(
             load_and_preprocess_image, axis=1, raw=True, result_type='reduce', args=(
                 ('color_mode', color_mode), ('target_size', target_size), ('interpolation', interpolation),
                 ('keep_aspect_ratio', keep_aspect_ratio)
             )
         )
-        test_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        test_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Class Label': 'LabelTensor'}, inplace=True)
+        test_img_and_labels_df = test_img_and_labels_df.dropna()
         test_ds = tf.data.Dataset.from_tensor_slices(
             (list(test_img_and_labels_df['NpImage']), list(test_img_and_labels_df['LabelTensor']))
         )

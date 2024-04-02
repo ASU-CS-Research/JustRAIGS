@@ -42,7 +42,7 @@ def main():
     train_ds, val_ds, test_ds = load_datasets(
         color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
-        num_images=800, oversample_train_set=False, oversample_val_set=False, is_multi=True
+        num_images=1000, oversample_train_set=False, oversample_val_set=False, is_multi=True
     )
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep:
