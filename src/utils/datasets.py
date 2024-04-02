@@ -1,7 +1,7 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import keras
 import numpy as np
 import tensorflow as tf
@@ -17,7 +17,7 @@ class DatasetSplit(enum.Enum):
     TEST = 3
     TRAIN_AND_VALIDATION = 4
 
-def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
+def load_and_preprocess_image(*args, **kwargs) -> Tuple[Union[np.ndarray, float], int]:
     """
     Loads an image into a :class:`~numpy.ndarray` preprocess it, return the label as an :class:`int`.
 
@@ -50,10 +50,15 @@ def load_and_preprocess_image(*args, **kwargs) -> Tuple[np.ndarray, int]:
     interpolation = args[3][1]
     keep_aspect_ratio = args[4][1]
     # logger.debug(f"load_img: {image_abs_path}")
-    image = keras.utils.load_img(
-        image_abs_path, color_mode=color_mode, target_size=target_size, interpolation=interpolation,
-        keep_aspect_ratio=keep_aspect_ratio
-    )
+    try:
+        image = keras.utils.load_img(
+            image_abs_path, color_mode=color_mode, target_size=target_size, interpolation=interpolation,
+            keep_aspect_ratio=keep_aspect_ratio
+        )
+    except Exception as e:
+        logger.error(f"Failed to load image: {image_abs_path}")
+        logger.error(f"Error: {e}")
+        return float('nan'), image_int_label
     image = keras.utils.img_to_array(image)
     return image, image_int_label
 
@@ -215,6 +220,8 @@ def load_datasets(
                 ('keep_aspect_ratio', keep_aspect_ratio)
             )
         )
+        # Images that fail to load will be NaN, so we drop them:
+        train_img_and_labels_df = train_img_and_labels_df.dropna()
         train_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
         train_ds = tf.data.Dataset.from_tensor_slices(
             (list(train_img_and_labels_df['NpImage']), list(train_img_and_labels_df['LabelTensor']))
@@ -228,6 +235,7 @@ def load_datasets(
             )
         )
         val_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        val_img_and_labels_df = val_img_and_labels_df.dropna()
         val_ds = tf.data.Dataset.from_tensor_slices(
             (list(val_img_and_labels_df['NpImage']), list(val_img_and_labels_df['LabelTensor']))
         )
@@ -240,6 +248,7 @@ def load_datasets(
             )
         )
         test_img_and_labels_df.rename(columns={'AbsPath': 'NpImage', 'Final Label Int': 'LabelTensor'}, inplace=True)
+        test_img_and_labels_df = test_img_and_labels_df.dropna()
         test_ds = tf.data.Dataset.from_tensor_slices(
             (list(test_img_and_labels_df['NpImage']), list(test_img_and_labels_df['LabelTensor']))
         )
