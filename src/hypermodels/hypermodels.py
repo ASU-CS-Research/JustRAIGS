@@ -14,7 +14,7 @@ from wandb.sdk.wandb_run import Run
 import wandb as wab
 import sys
 from contextlib import redirect_stdout
-from src.callbacks.custom import ConfusionMatrixCallback
+from src.callbacks.custom import ConfusionMatrixCallback, TrainValImageCallback
 from src.models.models import WaBModel, InceptionV3WaBModel, CVAEWaBModel
 from src.models.cvae import VariationalAutoEncoder
 from tensorflow.keras.losses import BinaryCrossentropy
@@ -235,9 +235,12 @@ class WaBHyperModel:
         confusion_matrix_callback = ConfusionMatrixCallback(
             num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=val_ds, validation_steps=None
         )
+        train_val_image_callback = TrainValImageCallback(
+            wab_trial_run=wab_trial_run, train_data=train_ds, val_data=val_ds, num_images=6
+        )
         # Fit the model and log the trial results to WaB:
         trial_history = model.fit(
-            train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback, confusion_matrix_callback]
+            train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback, confusion_matrix_callback, train_val_image_callback]
         )
         return trial_history
 
