@@ -153,6 +153,7 @@ class TrainValImageCallback(Callback):
         fig, axs = plt.subplots(2, self._num_images)
         for i in range(self._num_images):
             axs[0, i].imshow(train_images[i])
+            # Will definitely need to be changed for this to work with multi-class classification problems:
             axs[0, i].set_title('RG' if train_labels[i].numpy() == 1 else 'NRG')
             axs[0, i].axis('off')
             axs[1, i].imshow(val_images[i])
