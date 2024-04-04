@@ -14,7 +14,7 @@ from wandb.sdk.wandb_run import Run
 import wandb as wab
 import sys
 from contextlib import redirect_stdout
-from src.callbacks.custom import ConfusionMatrixCallback, TrainValImageCallback
+from src.callbacks.custom import ConfusionMatrixCallback, TrainValImageCallback, GradCAMCallback
 from src.models.models import WaBModel, InceptionV3WaBModel, CVAEWaBModel
 from src.models.cvae import VariationalAutoEncoder
 from tensorflow.keras.losses import BinaryCrossentropy
@@ -235,13 +235,23 @@ class WaBHyperModel:
         confusion_matrix_callback = ConfusionMatrixCallback(
             num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=val_ds, validation_steps=None
         )
-        train_val_image_callback = TrainValImageCallback(
-            wab_trial_run=wab_trial_run, train_data=train_ds, val_data=val_ds, num_images=6
+        # train_val_image_callback = TrainValImageCallback(
+        #     wab_trial_run=wab_trial_run, train_data=train_ds, val_data=val_ds, num_images=6
+        # )
+        grad_cam_callback = GradCAMCallback(
+            wab_trial_run=wab_trial_run, num_images=2, num_classes=2, target_conv_layer_name='conv2d_93',
+            validation_data=val_ds, validation_steps=None, validation_batch_size=val_ds.element_spec[1].shape[0],
+            log_grad_cam_heatmaps=False
         )
         # Fit the model and log the trial results to WaB:
-        trial_history = model.fit(
-            train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback, confusion_matrix_callback, train_val_image_callback]
-        )
+        try:
+            trial_history = model.fit(
+                train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback, confusion_matrix_callback, grad_cam_callback]
+            )
+        except Exception as err:
+            logger.exception(f"Exception occurred during trial run: {err}")
+            traceback.print_exc()
+            exit(1)
         return trial_history
 
 

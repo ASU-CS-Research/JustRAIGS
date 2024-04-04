@@ -10,6 +10,8 @@ import json
 from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel, CVAEFeatureExtractorHyperModel, \
     flatten_hyperparameters
 from src.utils.datasets import load_datasets
+from src.hypermodels.hypermodels import exc_handler
+import sys
 
 
 def main():
@@ -160,4 +162,5 @@ if __name__ == '__main__':
     logger.debug(f"DATA_DIR: {DATA_DIR}")
     logger.debug(f"HPARAM_JSON_PATH: {HPARAM_JSON_PATH}")
     tf.random.set_seed(seed=SEED)
+    sys.excepthook = exc_handler
     main()

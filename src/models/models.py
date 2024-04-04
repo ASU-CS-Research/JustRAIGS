@@ -259,17 +259,25 @@ class InceptionV3WaBModel(Model):
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
         model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
-        self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
+        # self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
+        super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
         # Build the model:
-        self._model.build((None,) + self._input_shape_no_batch)
+        # self._model.build((None,) + self._input_shape_no_batch)
+        self.build((None,) + self._input_shape_no_batch)
         # Log the model summary to WaB:
-        self._wab_trial_run.log({"model_summary": self._model.summary()})
+        # self._wab_trial_run.log({"model_summary": self._model.summary()})
+        self._wab_trial_run.log({"model_summary": self.summary()})
         # Compile the model:
-        self._model.compile(loss=self._loss, optimizer=self._optimizer)
-        super().__init__(*args, **kwargs)
+        # self._model.compile(loss=self._loss, optimizer=self._optimizer)
+        self.compile(loss=self._loss, optimizer=self._optimizer)
+        # super().__init__(*args, **kwargs)
 
-    def call(self, inputs, training=None, mask=None):
-        return self._model(inputs, training=training, mask=mask)
+    # @property
+    # def model(self):
+    #     return self._model
+
+    # def call(self, inputs, training=None, mask=None):
+    #     return self._model(inputs, training=training, mask=mask)
 
     def get_config(self):
         """
@@ -320,7 +328,7 @@ class InceptionV3WaBModel(Model):
             # Load in saved model and run assertions:
             logger.debug(f"Loading saved model for weight assertion check...")
             loaded_model = tf.keras.models.load_model(
-                args[0], custom_objects={"InceptionV3WaBModel": WaBModel}
+                args[0], custom_objects={"InceptionV3WaBModel": InceptionV3WaBModel}
             )
             # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
             error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
