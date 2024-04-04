@@ -23,7 +23,7 @@
             "value": "binary_crossentropy"
           },
           "num_epochs": {
-            "value": 10
+            "value": 1
           },
           "optimizer": {
             "parameters": {
@@ -139,7 +139,7 @@
             }
           },
           "num_thawed_layers": {
-            "value": 2
+            "value": 10
           },
           "loss": {
             "value": "binary_crossentropy"
