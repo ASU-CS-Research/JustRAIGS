@@ -12,15 +12,20 @@ from loguru import logger
 with open('JustRAIGS_Train_labels.csv', 'r') as file:
     heading = next(file)
 
-    document = csv.reader(file, delimiter=';')
+    reader = csv.reader(file, delimiter=';')
 
     positive_agreement = []
     negative_agreement = []
     left_positive_disagreement = []
     left_negative_disagreement = []
 
-    for row in document:
+    document = []
+
+    for row in reader:
         # row = document.iloc[:,i]
+
+        document.append(row)
+
         if row[4] == row[5]:
             if row[4] == 'RG':
                 positive_agreement.append(row)
@@ -138,6 +143,7 @@ with open('JustRAIGS_Train_labels.csv', 'r') as file:
 
 
     logger.info("features and graders:")
+    # document = csv.reader(file, delimiter=';')
     for row in document:
         if row[4] == 'NRG' and '1' in row[7:16]:
             logger.debug(f"Grader 1: {row[0]}:\t{row[1]}\t{row[4]}\t{row[7:16]}")
@@ -167,6 +173,7 @@ with open('JustRAIGS_Train_labels.csv', 'r') as file:
         "LC": 0,
     }
 
+    # document = csv.reader(file, delimiter=';')
     for row in document:
         if row[4] != row[5]:
             row_disagreements.append(row)
