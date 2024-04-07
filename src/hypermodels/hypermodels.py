@@ -255,7 +255,7 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
 
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
                  batch_size: int, metrics: List[Metric]):
-        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics)
+        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name="EfficientNetB7")
 
     def construct_model_run_trial(self):
         """

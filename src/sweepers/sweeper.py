@@ -92,10 +92,36 @@ def main():
             tf.keras.metrics.FalseNegatives()
         ]
     )
-    # Initialize the agent in charge of running the sweep:
-    wab.agent(
-        count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
+    '''
+    Initialize the sweep configuration:
+    '''
+    # Note: Do not use the keras object for the optimizer (e.g. Adam(learning_rate=0.001) instead of 'adam')
+    # or you get a RuntimeError('Should only create a single instance of _DefaultDistributionStrategy.') this may be a
+    # WaB bug which will be addressed in future updates.
+    assert os.path.exists(HPARAM_JSON_PATH), f"Hyperparameter JSON file not found at: {HPARAM_JSON_PATH}"
+    # Load hparams.json:
+    with open(HPARAM_JSON_PATH, 'r') as fp:
+        hyperparameters = json.load(fp=fp)
+    # Remove unnecessary parameters (as defined by the model attributes):
+    hyperparameters = flatten_hyperparameters(
+        hyperparameters, model_name=hypermodel.hyper_model_name, model_type=hypermodel.hyper_model_type
     )
+    # Add to the sweep configuration:
+    sweep_configuration = {
+        'method': 'grid',   # 'method': 'random'
+        'project': 'JustRAIGS',
+        'entity': 'appmais',
+        'metric': {
+            'name': 'val_loss',
+            'goal': 'minimize'
+        },
+        # 'early_terminate': {
+        #     'type': 'hyperband',
+        #     'min_iter': 3
+        # }
+        'parameters': hyperparameters
+    }
+    sweep_id = wab.sweep(sweep=sweep_configuration, project='JustRAIGS', entity='appmais')
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
