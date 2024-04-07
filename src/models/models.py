@@ -483,7 +483,7 @@ class EfficientNetB7WaBModel(Model):
             # Load in saved model and run assertions:
             logger.debug(f"Loading saved model for weight assertion check...")
             loaded_model = tf.keras.models.load_model(
-                args[0], custom_objects={"EfficientNetB7WaBModel": WaBModel}
+                args[0], custom_objects={"EfficientNetB7WaBModel": EfficientNetB7WaBModel}
             )
             # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
             error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"

@@ -161,6 +161,9 @@
               }
             }
           },
+          "num_epochs": {
+            "value": 100
+          },
           "optimizer": {
             "parameters": {
               "type": {
