@@ -8,8 +8,9 @@ import wandb.util
 from wandb.sdk.wandb_config import Config
 import json
 from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel, CVAEFeatureExtractorHyperModel, \
-    flatten_hyperparameters
+    EfficientNetB7WaBHyperModel, flatten_hyperparameters
 from src.utils.datasets import load_datasets
+
 
 def main():
     """
@@ -63,24 +64,7 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
-    # For Transfer Learning with InceptionV3:
-    hypermodel = InceptionV3WaBHyperModel(
-        train_ds=train_ds,
-        val_ds=val_ds,
-        test_ds=test_ds,
-        num_classes=NUM_CLASSES,
-        training=True,
-        batch_size=BATCH_SIZE,
-        metrics=[
-            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-            tf.keras.metrics.FalseNegatives()
-        ]
-    )
-
-    # '''
-    # For Transfer Learning with InceptionV3:
-    # '''
+    # # For Transfer Learning with InceptionV3:
     # hypermodel = InceptionV3WaBHyperModel(
     #     train_ds=train_ds,
     #     val_ds=val_ds,
@@ -94,23 +78,20 @@ def main():
     #         tf.keras.metrics.FalseNegatives()
     #     ]
     # )
-
-    # '''
-    # For Feature Extraction with a CVAE:
-    # '''
-    # hypermodel = CVAEFeatureExtractorHyperModel(
-    #     train_ds=train_ds,
-    #     val_ds=val_ds,
-    #     test_ds=test_ds,
-    #     num_classes=NUM_CLASSES,
-    #     training=True,
-    #     batch_size=BATCH_SIZE,
-    #     metrics=[
-    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-    #         tf.keras.metrics.FalseNegatives()
-    #     ]
-    # )
+    # For Transfer Learning with EfficientNetB7:
+    hypermodel = EfficientNetB7WaBHyperModel(
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        num_classes=NUM_CLASSES,
+        training=True,
+        batch_size=BATCH_SIZE,
+        metrics=[
+            'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+            tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+            tf.keras.metrics.FalseNegatives()
+        ]
+    )
     '''
     Initialize the sweep configuration:
     '''
@@ -141,7 +122,6 @@ def main():
         'parameters': hyperparameters
     }
     sweep_id = wab.sweep(sweep=sweep_configuration, project='JustRAIGS', entity='appmais')
-
     # Initialize the agent in charge of running the sweep:
     wab.agent(
         count=NUM_TRIALS, sweep_id=sweep_id, project='JustRAIGS', entity='appmais', function=hypermodel.construct_model_run_trial
