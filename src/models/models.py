@@ -256,10 +256,15 @@ class InceptionV3WaBModel(Model):
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
             exit(1)
-        # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
-        model_head = Flatten()(self._base_model.outputs[0])
+        # Add data augmentation layers
+        input_layer = tf.keras.Input(self._input_shape_no_batch)
+        random_flip = tf.keras.layers.RandomFlip("horizontal_and_vertical")(input_layer)
+        random_rotate = tf.keras.layers.RandomRotation(0.2)(random_flip)
+        self._base_model = self._base_model(random_rotate)
+        # Add a new head to the model (i.e. new Dense fully connected layyer and softmax):
+        model_head = Flatten()(self._base_model)
         model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
-        self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
+        self._model = Model(inputs=input_layer, outputs=model_head)
         # Build the model:
         self._model.build((None,) + self._input_shape_no_batch)
         # Log the model summary to WaB:
