@@ -11,11 +11,13 @@ import pandas as pd
 from loguru import logger
 import enum
 
+
 class DatasetSplit(enum.Enum):
     TRAIN = 1
     VALIDATION = 2
     TEST = 3
     TRAIN_AND_VALIDATION = 4
+
 
 def load_and_preprocess_image(*args, **kwargs) -> Tuple[Union[np.ndarray, float], int]:
     """
@@ -356,7 +358,7 @@ def get_oversampled_dataset(data: Dataset, batch_size: int, seed: Optional[int] 
 if __name__ == '__main__':
     # Note: Change num_partitions to 1 to load in only Train_0, change to 2 to load in Train_0 and Train_1, etc.
     train_ds, val_ds, test_ds = load_datasets(
-        color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=1,
+        color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False, num_partitions=6,
         batch_size=32, num_images=500, train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=42, is_multi=True,
         oversample_train_set=False, oversample_val_set=False
     )

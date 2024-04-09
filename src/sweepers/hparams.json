@@ -222,7 +222,7 @@
           }
         }
       },
-      "EfficientNetB0": {
+      "EfficientNetB7": {
         "parameters": {
           "input_shape": {
             "parameters": {
@@ -241,7 +241,10 @@
             "value": null
           },
           "loss": {
-            "value": "crossentropy"
+            "value": "categorical_crossentropy"
+          },
+          "num_epochs": {
+            "value": 10
           }
         }
       }

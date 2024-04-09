@@ -11,7 +11,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam, RMSprop, SGD
-from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.losses import BinaryCrossentropy, CategoricalCrossentropy
 import wandb as wab
 import matplotlib.pyplot as plt
 import time
@@ -414,6 +414,8 @@ class EfficientNetB7WaBModel(Model):
         loss_function = self._trial_hyperparameters['loss']
         if loss_function == 'binary_crossentropy':
             self._loss = BinaryCrossentropy(from_logits=False)
+        elif loss_function == 'categorical_crossentropy':
+            self._loss = CategoricalCrossentropy(from_logits=False)
         else:
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")

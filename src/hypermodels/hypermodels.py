@@ -17,7 +17,7 @@ from contextlib import redirect_stdout
 from src.callbacks.custom import ConfusionMatrixCallback, TrainValImageCallback
 from src.models.models import WaBModel, InceptionV3WaBModel, CVAEWaBModel, EfficientNetB7WaBModel
 from src.models.cvae import VariationalAutoEncoder
-from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.losses import BinaryCrossentropy, CategoricalCrossentropy
 from wandb.sdk.wandb_config import Config
 from enum import Enum
 
@@ -305,6 +305,8 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
         loss_function = wab.config['loss']
         if loss_function == 'binary_crossentropy':
             loss = BinaryCrossentropy(from_logits=False)
+        elif loss_function == 'categorical_crossentropy':
+            loss = CategoricalCrossentropy(from_logits=False)
         else:
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
