@@ -156,26 +156,39 @@
           }
         }
       },
-      "EfficientNetB0": {
+      "EfficientNetB7": {
         "parameters": {
           "input_shape": {
             "parameters": {
               "width_px": {
-                "value": 64
+                "value": 128
               },
               "height_px": {
-                "value": 64
+                "value": 128
               },
               "channels": {
                 "value": 3
               }
             }
           },
-          "num_thawed_layers": {
-            "value": 2
+          "num_epochs": {
+            "value": 100
+          },
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "sgd"
+              },
+              "learning_rate": {
+                "value": 0.001
+              }
+            }
           },
           "loss": {
             "value": "binary_crossentropy"
+          },
+          "num_thawed_layers": {
+            "value": null
           }
         }
       }
