@@ -175,11 +175,24 @@ def load_datasets(
             # Filtering by both graders agreeing on all of the additional labels signifigantly reduces the size
             # of the dataset to aprox. 186. Additionaly, G3 only grades when G1 and G2 dissagree on the final label
             # (NRG vs RG).
+            g1_multilabel_cols = train_data_labels_df.columns[train_data_labels_df.columns.str.startswith('G1')]
+            g2_multilabel_cols = train_data_labels_df.columns[train_data_labels_df.columns.str.startswith('G2')]
+            g1_multilabel_df = train_data_labels_df[g1_multilabel_cols].astype('bool')
+            g2_multilabel_df = train_data_labels_df[g2_multilabel_cols].astype('bool')
+            col_map = {g2_multilabel_col: g1_multilabel_col for g1_multilabel_col, g2_multilabel_col in zip(g1_multilabel_cols, g2_multilabel_cols)}
+            # Bitwise OR between true and false G1 and G2 labels:
+            multihot = g1_multilabel_df | g2_multilabel_df.rename(columns=col_map)
+            # Drop the G1 from the column names as this is now a boolean OR between G1 and G2:
+            multihot = multihot.rename(columns={g1_multilabel_col: g1_multilabel_col.replace('G1 ', '') for g1_multilabel_col in g1_multilabel_cols})
+            raise NotImplementedError("Here is where I left off refactoring with pandas-safe operations that aren't modifying a copy of a slice.")
+
             # train_data_labels_df["multihotG1"] = train_data_labels_df.filter(regex="G1 .*").to_numpy().tolist()
             # train_data_labels_df["multihotG2"] = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
             # train_data_labels_df = train_data_labels_df.query("multihotG1 == multihotG2")
-            train_data_labels_df["multihotG1"] = train_data_labels_df.filter(regex="G1 .*").to_numpy().tolist()
-            train_data_labels_df["multihotG2"] = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
+            # train_data_labels_df["multihotG1"] = train_data_labels_df.filter(regex="G1 .*").to_numpy().tolist()
+            # train_data_labels_df["multihotG2"] = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
+            multihot_g1 = train_data_labels_df.filter(regex="G1 .*").to_numpy().tolist()
+            multihot_g2 = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
             # Then we make a "multihot" column that is the element-wise logical OR of the two graders' labels.
             train_data_labels_df["multihotG1"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG1"]]
             train_data_labels_df["multihotG2"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG2"]]
