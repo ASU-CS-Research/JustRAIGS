@@ -67,7 +67,8 @@ def load_datasets(
         color_mode: str, target_size: Optional[Tuple[int, int]], interpolation: str, keep_aspect_ratio: bool,
         num_partitions: int, batch_size: int, oversample_train_set: bool, oversample_val_set: bool,
         num_images: Optional[int] = None, train_set_size: Optional[float] = 0.6, val_set_size: Optional[float] = 0.2,
-        test_set_size: Optional[float] = 0.2, seed: Optional[int] = 42, is_multi: Optional[bool] = False) -> [Dataset, Dataset, Dataset]:
+        test_set_size: Optional[float] = 0.2, seed: Optional[int] = 42, is_multi: Optional[bool] = False,
+        num_images_to_upload: Optional[int] = 6) -> [Dataset, Dataset, Dataset, Dataset]:
     """
     Constructs TensorFlow train, val, test :class:`~tensorflow.data.Dataset` s from the provided high resolution image
     training set.
@@ -261,6 +262,17 @@ def load_datasets(
         os.makedirs(test_dir_from_args, exist_ok=True, mode=0o774)
         shutil.chown(test_dir_from_args, group='just_raigs')
         test_ds.save(test_dir_from_args)
+
+    # Lastly, pull sample num_images_to_upload images from the val set to use with GradCAM. We would like equal number
+    # for each class. Return a dataset using tf.data.sample_from_datasets
+    upload_dataset = Dataset.sample_from_datasets(
+        datasets=[val_ds.filter(lambda x, y: tf.math.equal(y, 1)),
+                  val_ds.filter(lambda x, y: tf.math.equal(y, 0))],
+        weights=[0.5, 0.5],
+        seed=seed,
+        stop_on_empty_dataset=True
+    ).take(num_images_to_upload)
+    # logger.debug(f'Cardinality of val_images: {val_images.cardinality().numpy()}')
     # Oversample the training and validation datasets:
     if oversample_train_set:
         logger.debug(f"Oversampling training dataset.")
@@ -282,7 +294,7 @@ def load_datasets(
     test_ds = test_ds.batch(
         batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
     )
-    return train_ds, val_ds, test_ds
+    return train_ds, val_ds, test_ds, upload_dataset
 
 
 def get_oversampled_dataset(data: Dataset, batch_size: int, seed: Optional[int] = 250) -> Dataset:

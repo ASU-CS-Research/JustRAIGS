@@ -239,9 +239,9 @@ class WaBHyperModel:
         #     wab_trial_run=wab_trial_run, train_data=train_ds, val_data=val_ds, num_images=6
         # )
         grad_cam_callback = GradCAMCallback(
-            wab_trial_run=wab_trial_run, num_images=2, num_classes=2, target_conv_layer_name='conv2d_93',
+            wab_trial_run=wab_trial_run, num_images=2, num_classes=2, target_conv_layer_name='conv2d_25',
             validation_data=val_ds, validation_steps=None, validation_batch_size=val_ds.element_spec[1].shape[0],
-            log_grad_cam_heatmaps=False
+            log_grad_cam_heatmaps=True
         )
         # Fit the model and log the trial results to WaB:
         try:
