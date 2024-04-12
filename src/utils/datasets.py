@@ -175,20 +175,32 @@ def load_datasets(
             # Filtering by both graders agreeing on all of the additional labels signifigantly reduces the size
             # of the dataset to aprox. 186. Additionaly, G3 only grades when G1 and G2 dissagree on the final label
             # (NRG vs RG).
+            train_data_labels_df.dropna()
             g1_multilabel_cols = train_data_labels_df.columns[train_data_labels_df.columns.str.startswith('G1')]
             g2_multilabel_cols = train_data_labels_df.columns[train_data_labels_df.columns.str.startswith('G2')]
             # .. todo:: .astype(bool) converts NaN's to True because screw-you that's why.
+            # Apparently NaN's are themselves "truthy": bool(np.nan) == True. Let's just drop them.
             g1_multilabel_df = train_data_labels_df[g1_multilabel_cols]
             g2_multilabel_df = train_data_labels_df[g2_multilabel_cols]
             col_map = {g2_multilabel_col: g1_multilabel_col for g1_multilabel_col, g2_multilabel_col in zip(g1_multilabel_cols, g2_multilabel_cols)}
             # Bitwise OR between true and false G1 and G2 labels:
+            g1_multilabel_df = g1_multilabel_df.astype(bool)
+            g2_multilabel_df = g2_multilabel_df.rename(columns=col_map).astype(bool)
             multihot = g1_multilabel_df | g2_multilabel_df.rename(columns=col_map)
             # Drop the G1 from the column names as this is now a boolean OR between G1 and G2:
             multihot = multihot.rename(columns={g1_multilabel_col: g1_multilabel_col.replace('G1 ', '') for g1_multilabel_col in g1_multilabel_cols})
             # count number of disagreements across the ten classes for each sample:
-            diff = g1_multilabel_df.compare(g2_multilabel_df.rename(columns=col_map), keep_equal=True)
+            diff = g1_multilabel_df.compare(g2_multilabel_df.rename(columns=col_map), keep_equal=False)
+            # subtract .1 for each disagreement:
+            train_data_labels_df["disagreements"] = diff.sum(axis=1) * 0.1
+            train_data_labels_df["Sample Weights"] = 1
+            train_data_labels_df["Sample Weights"] -= train_data_labels_df["disagreements"]
+
+            # Replace multihot with a list of boolean arrays:
+            train_data_labels_df["Class Label"] = multihot.to_numpy().tolist()
+
             # diff = g1_multilabel_df.diff(g2_multilabel_df)
-            raise NotImplementedError("Here is where I left off refactoring with pandas-safe operations that aren't modifying a copy of a slice.")
+            # raise NotImplementedError("Here is where I left off refactoring with pandas-safe operations that aren't modifying a copy of a slice.")
 
             # train_data_labels_df["multihotG1"] = train_data_labels_df.filter(regex="G1 .*").to_numpy().tolist()
             # train_data_labels_df["multihotG2"] = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
@@ -197,21 +209,21 @@ def load_datasets(
             # train_data_labels_df["multihotG2"] = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
             # multihot_g1 = train_data_labels_df.filter(regex="G1 .*").to_numpy().tolist()
             # multihot_g2 = train_data_labels_df.filter(regex="G2 .*").to_numpy().tolist()
-            # Then we make a "multihot" column that is the element-wise logical OR of the two graders' labels.
-            train_data_labels_df["multihotG1"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG1"]]
-            train_data_labels_df["multihotG2"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG2"]]
-            train_data_labels_df["multihot"] = \
-                [np.logical_or(g1, g2) for g1, g2 in
-                 zip(train_data_labels_df["multihotG1"], train_data_labels_df["multihotG2"])]
-            # We also need sample weights that subtracts .05 from the weight of each sample if the two graders disagree.
-            train_data_labels_df["Sample Weights"] = [1] * train_data_labels_df.shape[0]
-            # count number of disagreements across the ten classes for each sample
-            train_data_labels_df["disagreements"] = \
-                [np.sum(np.logical_xor(g1, g2)) for g1, g2 in
-                 zip(train_data_labels_df["multihotG1"], train_data_labels_df["multihotG2"])]
-            # subtract .1 for each disagreement
-            train_data_labels_df["Sample Weights"] -= train_data_labels_df["disagreements"] * 0.1
-            train_data_labels_df = train_data_labels_df.rename(columns={"multihot": "Class Label"})
+            # # Then we make a "multihot" column that is the element-wise logical OR of the two graders' labels.
+            # train_data_labels_df["multihotG1"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG1"]]
+            # train_data_labels_df["multihotG2"] = [np.array(x, dtype=bool) for x in train_data_labels_df["multihotG2"]]
+            # train_data_labels_df["multihot"] = \
+            #     [np.logical_or(g1, g2) for g1, g2 in
+            #      zip(train_data_labels_df["multihotG1"], train_data_labels_df["multihotG2"])]
+            # # We also need sample weights that subtracts .05 from the weight of each sample if the two graders disagree.
+            # train_data_labels_df["Sample Weights"] = [1] * train_data_labels_df.shape[0]
+            # # count number of disagreements across the ten classes for each sample
+            # train_data_labels_df["disagreements"] = \
+            #     [np.sum(np.logical_xor(g1, g2)) for g1, g2 in
+            #      zip(train_data_labels_df["multihotG1"], train_data_labels_df["multihotG2"])]
+            # # subtract .1 for each disagreement
+            # train_data_labels_df["Sample Weights"] -= train_data_labels_df["disagreements"] * 0.1
+            # train_data_labels_df = train_data_labels_df.rename(columns={"multihot": "Class Label"})
             # train_data_labels_df = train_data_labels_df.rename(columns={"multihotG1": "Class Label"})
         # # Convert 'NRG' = 0 and 'RG' = 1
         # final_label_int_mask = train_data_labels_df['Final Label'] == 'NRG'
