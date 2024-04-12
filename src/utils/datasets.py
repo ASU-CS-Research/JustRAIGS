@@ -172,20 +172,25 @@ def load_datasets(
             train_data_labels_df['Class Label'] = np.where(final_label_int_mask, 0, 1)
         else:
             train_data_labels_df = train_data_labels_df[train_data_labels_df['Final Label'] == "RG"]
+            logger.debug(f"train_data_labels_df num elements where \'Final Label\' == RG: {train_data_labels_df.shape[0]}")
             # Filtering by both graders agreeing on all of the additional labels signifigantly reduces the size
             # of the dataset to aprox. 186. Additionaly, G3 only grades when G1 and G2 dissagree on the final label
             # (NRG vs RG).
-            train_data_labels_df.dropna()
+            # Get a subset of the DataFrame that contains G1's annotations for the ten classes:
             g1_multilabel_cols = train_data_labels_df.columns[train_data_labels_df.columns.str.startswith('G1')]
+            # Subset of the DataFrame that contains G2's annotations for the ten classes:
             g2_multilabel_cols = train_data_labels_df.columns[train_data_labels_df.columns.str.startswith('G2')]
-            # .. todo:: .astype(bool) converts NaN's to True because screw-you that's why.
-            # Apparently NaN's are themselves "truthy": bool(np.nan) == True. Let's just drop them.
+            # Apparently NaN's are themselves "truthy": bool(np.nan) == True. Let's just drop them:
+            train_data_labels_df.dropna(inplace=True, axis=0, subset=list(g1_multilabel_cols) + list(g2_multilabel_cols))
+            logger.debug(f"train_data_labels_df num elements after dropping NaN's: {train_data_labels_df.shape[0]}")
             g1_multilabel_df = train_data_labels_df[g1_multilabel_cols]
             g2_multilabel_df = train_data_labels_df[g2_multilabel_cols]
+            # A mapping of column names from the G2 column names to the G1 column names:
             col_map = {g2_multilabel_col: g1_multilabel_col for g1_multilabel_col, g2_multilabel_col in zip(g1_multilabel_cols, g2_multilabel_cols)}
-            # Bitwise OR between true and false G1 and G2 labels:
+            # Since the NaN's have been dropped it is safe to typecast the DataFrames to boolean:
             g1_multilabel_df = g1_multilabel_df.astype(bool)
             g2_multilabel_df = g2_multilabel_df.rename(columns=col_map).astype(bool)
+            # Bitwise OR between true and false G1 and G2 labels:
             multihot = g1_multilabel_df | g2_multilabel_df.rename(columns=col_map)
             # Drop the G1 from the column names as this is now a boolean OR between G1 and G2:
             multihot = multihot.rename(columns={g1_multilabel_col: g1_multilabel_col.replace('G1 ', '') for g1_multilabel_col in g1_multilabel_cols})
@@ -195,9 +200,9 @@ def load_datasets(
             train_data_labels_df["disagreements"] = diff.sum(axis=1) * 0.1
             train_data_labels_df["Sample Weights"] = 1
             train_data_labels_df["Sample Weights"] -= train_data_labels_df["disagreements"]
-
-            # Replace multihot with a list of boolean arrays:
+            # Take the multihot dataframe and convert it to a new column 'Class Label' of a list of boolean arrays:
             train_data_labels_df["Class Label"] = multihot.to_numpy().tolist()
+
 
             # diff = g1_multilabel_df.diff(g2_multilabel_df)
             # raise NotImplementedError("Here is where I left off refactoring with pandas-safe operations that aren't modifying a copy of a slice.")
