@@ -41,10 +41,10 @@ def main():
     '''
     Initialize TensorFlow datasets:
     '''
-    train_ds, val_ds, test_ds, _ = load_datasets(
+    train_ds, val_ds, test_ds = load_datasets(
         color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
-        num_images=1000, oversample_train_set=True, oversample_val_set=True, is_multi=False
+        num_images=None, oversample_train_set=False, oversample_val_set=False, is_multi=True
     )
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep:
@@ -93,7 +93,7 @@ def main():
             tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
             tf.keras.metrics.FalseNegatives()
         ],
-        num_images_to_visualize=2
+        num_images_to_visualize=1
     )
     # '''
     # For Feature Extraction with a CVAE:
@@ -154,8 +154,8 @@ if __name__ == '__main__':
     sweep configuration.
     """
     NUM_TRIALS = 1
-    BATCH_SIZE = 64
-    NUM_CLASSES = 2
+    BATCH_SIZE = 5
+    NUM_CLASSES = 10
     SEED = 42
     REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
     LOG_DIR = os.path.join(REPO_ROOT_DIR, 'logs')

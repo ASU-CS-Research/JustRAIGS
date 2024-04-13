@@ -423,7 +423,7 @@ class EfficientNetB7WaBModel(Model):
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
         model_head = tf.keras.layers.Dense(512, activation='relu')(model_head)
-        model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
+        model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
         # self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
         super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
         # Build the model:

@@ -304,13 +304,13 @@ def load_datasets(
 
     # Lastly, pull sample num_images_to_upload images from the val set to use with GradCAM. We would like equal number
     # for each class. Return a dataset using tf.data.sample_from_datasets
-    upload_dataset = Dataset.sample_from_datasets(
-        datasets=[val_ds.filter(lambda x, y: tf.math.equal(y, 1)),
-                  val_ds.filter(lambda x, y: tf.math.equal(y, 0))],
-        weights=[0.5, 0.5],
-        seed=seed,
-        stop_on_empty_dataset=True
-    ).take(num_images_to_upload)
+    # upload_dataset = Dataset.sample_from_datasets(
+    #     datasets=[val_ds.filter(lambda x, y: tf.math.equal(y, 1)),
+    #               val_ds.filter(lambda x, y: tf.math.equal(y, 0))],
+    #     weights=[0.5, 0.5],
+    #     seed=seed,
+    #     stop_on_empty_dataset=True
+    # ).take(num_images_to_upload)
     # logger.debug(f'Cardinality of val_images: {val_images.cardinality().numpy()}')
     # Oversample the training and validation datasets:
     if oversample_train_set:
@@ -333,7 +333,7 @@ def load_datasets(
     test_ds = test_ds.batch(
         batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
     )
-    return train_ds, val_ds, test_ds, upload_dataset
+    return train_ds, val_ds, test_ds
 
 
 def get_oversampled_dataset(data: Dataset, batch_size: int, seed: Optional[int] = 250) -> Dataset:

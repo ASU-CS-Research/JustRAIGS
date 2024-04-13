@@ -273,6 +273,9 @@ class WaBHyperModel:
             callbacks = [wab_callback, confusion_matrix_callback, grad_cam_callback]
         else:
             callbacks = [wab_callback, confusion_matrix_callback]
+        if num_classes > 1:
+            callbacks = [wab_callback]
+            logger.error(f"Multiclass classification callbacks not yet implemented. Overriding callbacks to WaBCallback only!")
 
         logger.info(f"Callbacks: {callbacks}")
         # Fit the model and log the trial results to WaB:

@@ -284,7 +284,17 @@
             "value": "categorical_crossentropy"
           },
           "num_epochs": {
-            "value": 10
+            "value": 500
+          },
+          "visualization": {
+            "parameters": {
+              "target_layer": {
+                "value": "conv2d_93"
+              },
+              "epoch_frequency": {
+                "value": 10
+              }
+            }
           }
         }
       }
