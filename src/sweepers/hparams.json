@@ -241,6 +241,9 @@
               }
             }
           },
+          "num_epochs": {
+            "value": 100
+          },
           "visualization": {
             "parameters": {
               "target_layer": {
@@ -252,13 +255,23 @@
             }
           },
           "num_thawed_layers": {
-            "value": 2
+            "value": null
           },
           "loss": {
             "value": "binary_crossentropy"
           },
           "kernel_size": {
             "value": 11
+          },
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.01
+              }
+            }
           }
         }
       },
@@ -283,8 +296,18 @@
           "loss": {
             "value": "categorical_crossentropy"
           },
+          "optimizer": {
+            "parameters": {
+              "type": {
+                "value": "adam"
+              },
+              "learning_rate": {
+                "value": 0.01
+              }
+            }
+          },
           "num_epochs": {
-            "value": 500
+            "value": 100
           },
           "visualization": {
             "parameters": {

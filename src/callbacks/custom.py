@@ -3,6 +3,7 @@ from loguru import logger
 import seaborn as sns
 from typing import Optional
 from matplotlib import cm
+from matplotlib import colors
 from wandb.apis.public import Run
 from tensorflow.data import Dataset
 from tensorflow.keras.callbacks import Callback
@@ -45,13 +46,110 @@ class ConfusionMatrixCallback(Callback):
 
         """
         self._num_classes = num_classes
+        if self._num_classes > 2:
+            self._is_multiclass_classification = True
+        else:
+            self._is_multiclass_classification = False
         self._wab_trial_run = wab_trial_run
         self._validation_data = validation_data
         self._epoch_frequency = epoch_frequency
         self._validation_steps = validation_steps
         super().__init__()
 
-    def _confusion_matrix(self):
+    def _multilabel_confusion_matrix(self, epoch: int):
+        logger.debug(f"Generating confusion matrix for {self._num_classes} classes on the validation dataset...")
+        # Check to see if the provided validation dataset is infinite:
+        if self._validation_data.cardinality().numpy() == tf.data.INFINITE_CARDINALITY:
+            if self._validation_steps is None:
+                raise ValueError("Since the provided validation dataset is infinite, the number of validation steps "
+                                 "must be specified.")
+        index_to_label_map = {0: 'ANRS', 1: 'ANRI', 2: 'RNFLDS', 3: 'RNFLDI', 4: 'BCLVS', 5: 'BCLVI', 6: 'NVT', 7: 'DH', 8: 'LD', 9: 'LC'}
+        y_pred_prob = []
+        y_true = []
+        y_pred_bool = []
+        for i, batch in enumerate(self._validation_data):
+            if self._validation_steps is not None:
+                if i == self._validation_steps:
+                    break
+            images = batch[0]
+            labels = batch[1]
+            for j, (image, true_labels) in enumerate(zip(images.numpy(), labels.numpy())):
+                y_true.append(list(true_labels))
+            y_pred_batch = self.model.predict_on_batch(images).squeeze()
+            for j, (image, pred_probs) in enumerate(zip(images, y_pred_batch)):
+                y_pred_prob.append(list(pred_probs))
+                y_pred_bool.append([True if pred_prob > 0.5 else False for pred_prob in pred_probs])
+        '''
+        Confusion matrix in the multiclass case (see 
+        https://github.com/tensorflow/addons/blob/v0.20.0/tensorflow_addons/metrics/multilabel_confusion_matrix.py#L28-L188
+        ):
+        '''
+        y_true = np.array(y_true, dtype=np.bool)
+        y_pred_prob = np.array(y_pred_prob, dtype=np.float32)
+        y_pred_bool = np.array(y_pred_bool, dtype=np.bool)
+        # y_true = tf.cast(y_true, tf.int32)
+        # true positive
+        true_positive = tf.math.count_nonzero(y_true * y_pred_bool, 0)
+        # predictions sum
+        pred_sum = tf.math.count_nonzero(y_pred_bool, 0)
+        # true labels sum
+        true_sum = tf.math.count_nonzero(y_true, 0)
+        false_positive = pred_sum - true_positive
+        false_negative = true_sum - true_positive
+        y_true_negative = tf.math.not_equal(y_true, True)
+        y_pred_negative = tf.math.not_equal(y_pred_bool, True)
+        true_negative = tf.math.count_nonzero(
+            tf.math.logical_and(y_true_negative, y_pred_negative), axis=0
+        )
+        # Flatten confusion matrix:
+        confusion_matrix = tf.convert_to_tensor(
+            [true_negative, false_positive, false_negative, true_positive], dtype=tf.int32
+        )
+        # Reshape into 2*2 matrix:
+        confusion_matrix = tf.reshape(tf.transpose(confusion_matrix), [-1, 2, 2])
+
+        min_count = 0
+        max_count = tf.reduce_max(confusion_matrix)
+        normalizer = colors.Normalize(vmin=min_count, vmax=max_count)
+        # cbar_scalar_mappable = cm.ScalarMappable(norm=normalizer, cmap=sns.color_palette("rocket", as_cmap=True))
+        fig = plt.figure(figsize=(40, 5))
+        cax = fig.add_subplot(1, 11, 11)
+        axes = []
+        for i in range(self._num_classes):
+            # ax = axes[i]
+            if i == 0:
+                ax = fig.add_subplot(1, 11, i+1)
+                sns.heatmap(
+                    confusion_matrix[i], ax=ax, cbar_ax=cax, cbar_kws={
+                        'norm': normalizer
+                    }, annot=True, fmt="g", cbar=True, xticklabels=['Neg.', 'Pos.'],
+                    yticklabels=['Neg.', 'Pos.']
+                )
+                ax.set_xlabel('Predicted')
+                ax.set_ylabel('Actual')
+                ax.set_xticklabels(['Neg.', 'Pos.'], rotation=90)
+                ax.set_yticklabels(['Neg.', 'Pos.'], rotation=0)
+            else:
+                ax = fig.add_subplot(1, 11, i+1, sharex=axes[i-1], sharey=axes[i-1])
+                sns.heatmap(
+                    confusion_matrix[i], ax=ax, cbar_ax=cax, annot=True, fmt="g", cbar=True, xticklabels=True,
+                    yticklabels=False, cbar_kws={
+                        'norm': normalizer
+                    }
+                )
+                ax.set_xlabel('Predicted')
+                ax.set_xticklabels(['Neg.', 'Pos.'], rotation=90)
+                # ax.set_yticklabels(['Neg.', 'Pos.'], rotation=0)
+            ax.set_title(f"{index_to_label_map[i]}")
+            axes.append(ax)
+        plt.tight_layout()
+        # plt.suptitle(f"Confusion Matrix at Epoch {epoch}")
+        # plt.show()
+        self._wab_trial_run.log({'confusion_matrix': wab.Image(fig)})
+        plt.clf()
+        plt.close(fig)
+
+    def _binary_confusion_matrix(self):
         logger.debug(f"Generating confusion matrix for {self._num_classes} classes on the validation dataset...")
         # Check to see if the provided validation dataset is infinite:
         if self._validation_data.cardinality().numpy() == tf.data.INFINITE_CARDINALITY:
@@ -97,7 +195,10 @@ class ConfusionMatrixCallback(Callback):
     def on_epoch_end(self, epoch, logs=None):
         if epoch % self._epoch_frequency == 0:
             logger.debug(f"Logging confusion matrix at epoch {epoch} at a frequency of {self._epoch_frequency} epochs.")
-            self._confusion_matrix()
+            if self._is_multiclass_classification:
+                self._multilabel_confusion_matrix(epoch=epoch)
+            else:
+                self._binary_confusion_matrix()
 
     def on_train_end(self, logs=None):
         """

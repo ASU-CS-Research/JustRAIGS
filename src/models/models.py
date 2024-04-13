@@ -228,8 +228,14 @@ class InceptionV3WaBModel(Model):
         '''
         # Ensure the necessary hyperparameters are present in the search space:
         if 'num_thawed_layers' in self._trial_hyperparameters:
-            for i in range(self._trial_hyperparameters['num_thawed_layers']):
-                self._base_model.layers[-i].trainable = True
+            num_thawed_layers = self._trial_hyperparameters['num_thawed_layers']
+            if num_thawed_layers is not None:
+                for i in range(num_thawed_layers):
+                    self._base_model.layers[-i].trainable = True
+                else:
+                    # Thaw the base model:
+                    for layer in self._base_model.layers:
+                        layer.trainable = True
         else:
             raise ValueError(f"num_thawed_layers not found in trial hyperparameters: {self._trial_hyperparameters}")
         if 'optimizer' not in self._trial_hyperparameters:

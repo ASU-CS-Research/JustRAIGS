@@ -273,9 +273,11 @@ class WaBHyperModel:
             callbacks = [wab_callback, confusion_matrix_callback, grad_cam_callback]
         else:
             callbacks = [wab_callback, confusion_matrix_callback]
-        if num_classes > 1:
-            callbacks = [wab_callback]
-            logger.error(f"Multiclass classification callbacks not yet implemented. Overriding callbacks to WaBCallback only!")
+        if num_classes > 2:
+            # .. todo:: Remove once grad_cam_callback works in the multiclass case.
+            callbacks = [wab_callback, confusion_matrix_callback]
+            logger.error(f"Multiclass classification callbacks not yet implemented for GradCAM. Overriding callbacks to "
+                         f"WaBCallback and ConfusionMatrix only!")
 
         logger.info(f"Callbacks: {callbacks}")
         # Fit the model and log the trial results to WaB:
@@ -465,6 +467,7 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
             exit(1)
         visualizations = wab.config['visualization']
         visualization_frequency_epochs = visualizations['epoch_frequency']
+        target_conv_layer_to_visualize = visualizations['target_layer']
         # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
         model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
         # compile the model:
@@ -486,7 +489,8 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
                 num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
-                visualization_frequency_epochs=visualization_frequency_epochs
+                visualization_frequency_epochs=visualization_frequency_epochs,
+                target_conv_layer_name_to_visualize=target_conv_layer_to_visualize
             )
         else:
             # Support for final training run performed after model selection process:
@@ -494,7 +498,8 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
                 num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
-                visualization_frequency_epochs=visualization_frequency_epochs
+                visualization_frequency_epochs=visualization_frequency_epochs,
+                target_conv_layer_name_to_visualize=target_conv_layer_to_visualize
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()

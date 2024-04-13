@@ -67,21 +67,7 @@ def main():
     #     ]
     # )
     # # For Transfer Learning with InceptionV3:
-    # hypermodel = InceptionV3WaBHyperModel(
-    #     train_ds=train_ds,
-    #     val_ds=val_ds,
-    #     test_ds=test_ds,
-    #     num_classes=NUM_CLASSES,
-    #     training=True,
-    #     batch_size=BATCH_SIZE,
-    #     metrics=[
-    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
-    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
-    #         tf.keras.metrics.FalseNegatives()
-    #     ]
-    # )
-    # For Transfer Learning with EfficientNetB7:
-    hypermodel = EfficientNetB7WaBHyperModel(
+    hypermodel = InceptionV3WaBHyperModel(
         train_ds=train_ds,
         val_ds=val_ds,
         test_ds=test_ds,
@@ -92,9 +78,23 @@ def main():
             'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
             tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
             tf.keras.metrics.FalseNegatives()
-        ],
-        num_images_to_visualize=1
+        ]
     )
+    # For Transfer Learning with EfficientNetB7:
+    # hypermodel = EfficientNetB7WaBHyperModel(
+    #     train_ds=train_ds,
+    #     val_ds=val_ds,
+    #     test_ds=test_ds,
+    #     num_classes=NUM_CLASSES,
+    #     training=True,
+    #     batch_size=BATCH_SIZE,
+    #     metrics=[
+    #         'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
+    #         tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
+    #         tf.keras.metrics.FalseNegatives()
+    #     ],
+    #     num_images_to_visualize=1
+    # )
     # '''
     # For Feature Extraction with a CVAE:
     # '''
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     which will remain constant between runs below. The hyperparameters which will be varied should be defined in the
     sweep configuration.
     """
-    NUM_TRIALS = 1
+    NUM_TRIALS = 100
     BATCH_SIZE = 5
     NUM_CLASSES = 10
     SEED = 42
