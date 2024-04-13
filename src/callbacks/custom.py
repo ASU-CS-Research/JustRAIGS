@@ -2,7 +2,6 @@ import numpy as np
 from loguru import logger
 import seaborn as sns
 from typing import Optional
-
 from matplotlib import cm
 from wandb.apis.public import Run
 from tensorflow.data import Dataset
@@ -179,10 +178,10 @@ class GradCAMCallback(Callback):
     def __init__(
             self, num_images: int, num_classes: int, wab_trial_run: Run, target_conv_layer_name: str,
             validation_data: Dataset,
-            validation_batch_size: int, validation_steps: Optional[int] = None,
+             validation_steps: Optional[int] = None,
             log_conv2d_output: Optional[bool] = False, log_grad_cam_heatmaps: Optional[bool] = False,
             log_target_conv_layer_kernels: Optional[bool] = False,
-            grad_cam_heatmap_alpha_value: Optional[float] = 0.4):
+            grad_cam_heatmap_alpha_value: Optional[float] = 0.4, validation_batch_size: Optional[int] = None):
         """
 
         Args:
@@ -196,9 +195,8 @@ class GradCAMCallback(Callback):
             validation_data (Dataset): A tensorflow Dataset object containing the validation data. This dataset may or
               may not have infinite cardinality at runtime (as a result of oversampling). The dataset will yield (x, y)
               tuples of validation data.
-            validation_batch_size (int): The number of images in a validation dataset batch. In its current state this
-              callback will un-batch the provided dataset. This argument is required so that it is possible to re-batch
-              the dataset after Grad-CAM images are generated.
+            validation_batch_size (int): The number of images in a validation dataset batch. If None, it is expected
+              that the validation dataset has already been unbatched.
             validation_steps (Optional[int]): The number of steps/batches to be considered one epoch for the validation
               dataset. This value must be provided if the validation dataset has infinite cardinality at runtime.
             log_conv2d_output (Optional[bool]): A boolean flag indicating whether the raw output of the Convolutional
@@ -211,7 +209,7 @@ class GradCAMCallback(Callback):
               northbound) to WandB.
             grad_cam_heatmap_alpha_value (Optional[float]): The alpha value to use when superimposing the Grad-CAM
               heatmaps onto the source image. This value should be between 0 and 1, and defaults to ``0.4``.
-
+            seed (Optional[int]): The random seed to use for reproducibility.
         """
         self._num_images = num_images
         self._num_classes = num_classes
@@ -225,17 +223,21 @@ class GradCAMCallback(Callback):
         self._log_target_conv_layer_kernels = log_target_conv_layer_kernels
         self._grad_cam_heatmap_alpha_value = grad_cam_heatmap_alpha_value
 
-    def on_train_end(self, logs=None):
-        logger.debug(f"Generating Grad-CAM visuals for {self._num_images} on the validation dataset...")
+    def _grad_cam(self):
+        logger.debug(f"Generating Grad-CAM visuals for {self._num_images} images on the validation dataset...")
         # Get image shape from the dataset (excluding the batch dimension):
-        image_shape = tuple(self._validation_data.element_spec[0].shape[1:])
+        if self._validation_batch_size is not None:
+            image_shape = tuple(self._validation_data.element_spec[0].shape[1:])
+        else:
+            image_shape = self._validation_data.element_spec[0].shape
         # Check to see if the provided validation dataset is infinite:
         if self._validation_data.cardinality().numpy() == tf.data.INFINITE_CARDINALITY:
             if self._validation_steps is None:
                 raise ValueError(
                     "Since the provided validation dataset is infinite, the number of validation steps "
                     "must be specified.")
-        self._validation_data = self._validation_data.unbatch()
+        if self._validation_batch_size is not None:
+            self._validation_data = self._validation_data.unbatch()
         num_correct_predictions = 0
         correctly_predicted_random_images = np.zeros((self._num_images, *image_shape))
         correctly_predicted_random_labels = np.zeros((self._num_images, 1))
@@ -280,16 +282,26 @@ class GradCAMCallback(Callback):
             superimposed_img = jet_heatmap * self._grad_cam_heatmap_alpha_value + (image * 255)
             superimposed_img = tf.keras.utils.array_to_img(superimposed_img)
             fig = plt.figure(num=1)
+            plt.grid(False)
             plt.imshow(superimposed_img, cmap=jet_cm)
             plt.suptitle(f"Grad-CAM at Layer {self._target_conv_layer_name}")
             plt.colorbar()
-            plt.grid(None)
             # plt.show()
             self._wab_trial_run.log({f'grad_cam_{self._target_conv_layer_name}': wab.Image(fig)})
             plt.clf()
             plt.close(fig)
-        # Re-batch the validation dataset:
-        self._validation_data = self._validation_data.batch(batch_size=self._validation_batch_size)
+        # Re-batch the validation dataset if necessary:
+        if self._validation_batch_size is not None:
+            self._validation_data = self._validation_data.batch(batch_size=self._validation_batch_size)
+
+    def on_epoch_end(self, epoch, logs=None):
+        visualization_interval_in_epochs = 10
+        if epoch % visualization_interval_in_epochs == 0:
+            logger.debug(f"Logging Grad-CAM visuals at epoch {epoch} at a frequency of {visualization_interval_in_epochs} epochs.")
+            self._grad_cam()
+
+    def on_train_end(self, logs=None):
+        self._grad_cam()
 
     def _get_grad_cam_activation_heatmap_for_images(
             self, images: np.ndarray, num_classes: int, log_heatmap: Optional[bool] = False, log_conv_output: Optional[bool] = False,

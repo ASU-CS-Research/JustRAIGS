@@ -46,7 +46,7 @@ class WaBHyperModel:
     def __init__(
             self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
             batch_size: int, metrics: List[Metric], wab_config_defaults: Optional[Dict[str, Any]] = None,
-            hyper_model_name: Optional[str] = 'WaBHyperModel'):
+            hyper_model_name: Optional[str] = 'WaBHyperModel', num_images_to_visualize: Optional[int] = 6):
         """
 
         Args:
@@ -67,6 +67,8 @@ class WaBHyperModel:
             hyper_model_name (Optional[str]): Defaults to ``'WaBHyperModel'``. The name of the hyper model utilized by
               the :meth:`~src.hypermodels.hypermodels.flatten_hyperparameters` method to subset the hyperparameter
               search space for the WaB Sweeper agent.
+            num_images_to_visualize (int): The number of images to utilize in visualizations (both during training and
+              inference).
 
         """
         self._train_ds = train_ds
@@ -96,6 +98,7 @@ class WaBHyperModel:
         self._wab_group_name = f"{wab.util.generate_id()}"
         self._hyper_model_name = hyper_model_name
         self._hyper_model_type = ModelType.BINARY_CLASSIFICATION if num_classes == 2 else ModelType.MULTICLASS_CLASSIFICATION
+        self._num_images_to_visualize = num_images_to_visualize
 
     @property
     def hyper_model_type(self):
@@ -175,14 +178,14 @@ class WaBHyperModel:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs']
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs']
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
@@ -190,7 +193,7 @@ class WaBHyperModel:
     @staticmethod
     def run_trial(
             model: Model, num_classes: int, wab_trial_run: Run, train_ds: Dataset, val_ds: Optional[Dataset],
-            test_ds: Dataset, num_epochs: int) -> History:
+            test_ds: Dataset, num_epochs: int, num_images_to_visualize: int) -> History:
         """
         Runs an individual trial (i.e. a unique set of hyperparameters) for the model as part of an overarching sweep.
         This method is responsible for training (i.e. fitting) the model, and maintaining a :class:`keras.callbacks.History`
@@ -212,6 +215,7 @@ class WaBHyperModel:
             num_epochs (int): The number of epochs to train the provided :class:`tf.keras.Model` for during fitting.
             inference_target_conv_layer_name (str): The name of the target convolutional layer to be used for
               visualization purposes.
+            num_images_to_visualize (int): The number of images to plot for visualization purposes during training.
 
         Returns:
             :class:`keras.callbacks.History`: The history object containing the training and validation metrics for the
@@ -235,13 +239,18 @@ class WaBHyperModel:
         confusion_matrix_callback = ConfusionMatrixCallback(
             num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=val_ds, validation_steps=None
         )
+        # Sample the same images from the validation set to use for callbacks during training:
+        val_ds_for_visuals = val_ds.take(num_images_to_visualize).unbatch()
         # train_val_image_callback = TrainValImageCallback(
-        #     wab_trial_run=wab_trial_run, train_data=train_ds, val_data=val_ds, num_images=6
+        #     wab_trial_run=wab_trial_run, train_data=train_ds, val_data=val_ds_for_visuals, num_images=6
         # )
         grad_cam_callback = GradCAMCallback(
-            wab_trial_run=wab_trial_run, num_images=2, num_classes=2, target_conv_layer_name='conv2d_25',
-            validation_data=val_ds, validation_steps=None, validation_batch_size=val_ds.element_spec[1].shape[0],
-            log_grad_cam_heatmaps=True
+            wab_trial_run=wab_trial_run, num_images=num_images_to_visualize, num_classes=num_classes,
+            target_conv_layer_name='conv2d_93',
+            validation_data=val_ds_for_visuals, validation_steps=None,
+            # validation_batch_size=val_ds_for_visuals.element_spec[1].shape[0],
+            validation_batch_size=None,
+            log_grad_cam_heatmaps=False
         )
         # Fit the model and log the trial results to WaB:
         try:
@@ -267,9 +276,11 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
     """
 
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
-                 batch_size: int, metrics: List[Metric], hyper_model_name: Optional[str] = "InceptionV3"):
+                 batch_size: int, metrics: List[Metric], hyper_model_name: Optional[str] = "InceptionV3",
+                 num_images_to_visualize: Optional[int] = 6):
         super().__init__(
-            train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name=hyper_model_name
+            train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name=hyper_model_name,
+            num_images_to_visualize=num_images_to_visualize
         )
         self._hyper_model_type = ModelType.BINARY_CLASSIFICATION if num_classes == 2 else ModelType.MULTICLASS_CLASSIFICATION
 
@@ -338,14 +349,14 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs']
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs']
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
@@ -358,9 +369,11 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
     for each trial (unique set of hyperparameters) and training the model that performs feature extraction.
     """
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
-                 batch_size: int, metrics: List[Metric], hyper_model_name: Optional[str] = "CVAEFeatureExtractorHyperModel"):
+                 batch_size: int, metrics: List[Metric], hyper_model_name: Optional[str] = "CVAEFeatureExtractorHyperModel",
+                 num_images_to_visualize: Optional[int] = 6):
         super().__init__(
-            train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name=hyper_model_name
+            train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name=hyper_model_name,
+            num_images_to_visualize=num_images_to_visualize
         )
 
     def construct_model_run_trial(self):
@@ -432,14 +445,14 @@ class CVAEFeatureExtractorHyperModel(WaBHyperModel):
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs']
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs']
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
             )
         # .. todo:: Do we want a separate trial run for the feature extractor? If so, don't call finish here:
         wab_trial_run.finish()
