@@ -10,6 +10,8 @@ import json
 from src.hypermodels.hypermodels import WaBHyperModel, InceptionV3WaBHyperModel, CVAEFeatureExtractorHyperModel, \
     EfficientNetB7WaBHyperModel, flatten_hyperparameters
 from src.utils.datasets import load_datasets
+from src.hypermodels.hypermodels import exc_handler
+import sys
 
 
 def main():
@@ -39,10 +41,10 @@ def main():
     '''
     Initialize TensorFlow datasets:
     '''
-    train_ds, val_ds, test_ds = load_datasets(
+    train_ds, val_ds, test_ds, _ = load_datasets(
         color_mode='rgb', target_size=(75, 75), interpolation='bilinear', keep_aspect_ratio=False,
         train_set_size=0.6, val_set_size=0.2, test_set_size=0.2, seed=SEED, num_partitions=6, batch_size=BATCH_SIZE,
-        num_images=1000, oversample_train_set=False, oversample_val_set=False, is_multi=True
+        num_images=1000, oversample_train_set=True, oversample_val_set=True, is_multi=False
     )
     '''
     Initialize the WaB HyperModel in charge of setting up and executing individual trials as part of the sweep:
@@ -150,9 +152,9 @@ if __name__ == '__main__':
     which will remain constant between runs below. The hyperparameters which will be varied should be defined in the
     sweep configuration.
     """
-    NUM_TRIALS = 10
+    NUM_TRIALS = 1
     BATCH_SIZE = 64
-    NUM_CLASSES = 10
+    NUM_CLASSES = 2
     SEED = 42
     REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
     LOG_DIR = os.path.join(REPO_ROOT_DIR, 'logs')
@@ -169,4 +171,5 @@ if __name__ == '__main__':
     logger.debug(f"DATA_DIR: {DATA_DIR}")
     logger.debug(f"HPARAM_JSON_PATH: {HPARAM_JSON_PATH}")
     tf.random.set_seed(seed=SEED)
+    sys.excepthook = exc_handler
     main()

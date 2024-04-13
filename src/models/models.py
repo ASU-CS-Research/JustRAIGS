@@ -424,17 +424,25 @@ class EfficientNetB7WaBModel(Model):
         model_head = Flatten()(self._base_model.outputs[0])
         model_head = tf.keras.layers.Dense(512, activation='relu')(model_head)
         model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
-        self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
+        # self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
+        super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
         # Build the model:
-        self._model.build((None,) + self._input_shape_no_batch)
+        # self._model.build((None,) + self._input_shape_no_batch)
+        self.build((None,) + self._input_shape_no_batch)
         # Log the model summary to WaB:
-        self._wab_trial_run.log({"model_summary": self._model.summary()})
+        # self._wab_trial_run.log({"model_summary": self._model.summary()})
+        self._wab_trial_run.log({"model_summary": self.summary()})
         # Compile the model:
-        self._model.compile(loss=self._loss, optimizer=self._optimizer)
-        super().__init__(*args, **kwargs)
+        # self._model.compile(loss=self._loss, optimizer=self._optimizer)
+        self.compile(loss=self._loss, optimizer=self._optimizer)
+        # super().__init__(*args, **kwargs)
 
-    def call(self, inputs, training=None, mask=None):
-        return self._model(inputs, training=training, mask=mask)
+    # @property
+    # def model(self):
+    #     return self._model
+
+    # def call(self, inputs, training=None, mask=None):
+    #     return self._model(inputs, training=training, mask=mask)
 
     def get_config(self):
         """

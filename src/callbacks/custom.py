@@ -2,6 +2,7 @@ import numpy as np
 from loguru import logger
 import seaborn as sns
 from typing import Optional
+from matplotlib import cm
 from wandb.apis.public import Run
 from tensorflow.data import Dataset
 from tensorflow.keras.callbacks import Callback
@@ -152,11 +153,11 @@ class TrainValImageCallback(Callback):
                 break
         fig, axs = plt.subplots(2, self._num_images)
         for i in range(self._num_images):
-            axs[0, i].imshow(train_images[i])
+            axs[0, i].imshow(np.ndarray.astype(train_images[i].numpy() * 255, np.uint8))
             # Will definitely need to be changed for this to work with multi-class classification problems:
             axs[0, i].set_title('RG' if train_labels[i].numpy() == 1 else 'NRG')
             axs[0, i].axis('off')
-            axs[1, i].imshow(val_images[i])
+            axs[1, i].imshow(np.ndarray.astype(val_images[i].numpy() * 255, np.uint8))
             axs[1, i].set_title('RG' if val_labels[i].numpy() == 1 else 'NRG')
             axs[1, i].axis('off')
         # Label the first row of images as training images and the second row as validation images:
@@ -164,3 +165,261 @@ class TrainValImageCallback(Callback):
         axs[1, 0].set_ylabel('Validation Images')
         plt.tight_layout()
         self._wab_trial_run.log({'train_val_images': wab.Image(fig)})
+        plt.clf()
+        plt.close(fig)
+
+
+class GradCAMCallback(Callback):
+    """
+    Runs Grad-CAM on a subset of random images from the validation set (where the predicted class label is correct) and
+    uploads the results to WandB. This callback is designed to execute only when training is finished.
+    """
+
+    def __init__(
+            self, num_images: int, num_classes: int, wab_trial_run: Run, target_conv_layer_name: str,
+            validation_data: Dataset,
+             validation_steps: Optional[int] = None,
+            log_conv2d_output: Optional[bool] = False, log_grad_cam_heatmaps: Optional[bool] = False,
+            log_target_conv_layer_kernels: Optional[bool] = False,
+            grad_cam_heatmap_alpha_value: Optional[float] = 0.4, validation_batch_size: Optional[int] = None):
+        """
+
+        Args:
+            num_classes (int): The number of classes for the classification problem.
+            num_images (int): The number of validation set images to run Grad-CAM on (where the class label is
+              predicted correctly).
+            num_classes (int): The number of classes for the classification problem.
+            wab_trial_run (Run): An instance of the WandB Run class for the current trial.
+            target_conv_layer_name (str): The name of the convolutional layer that Grad-CAM should utilize for
+              visualizations.
+            validation_data (Dataset): A tensorflow Dataset object containing the validation data. This dataset may or
+              may not have infinite cardinality at runtime (as a result of oversampling). The dataset will yield (x, y)
+              tuples of validation data.
+            validation_batch_size (int): The number of images in a validation dataset batch. If None, it is expected
+              that the validation dataset has already been unbatched.
+            validation_steps (Optional[int]): The number of steps/batches to be considered one epoch for the validation
+              dataset. This value must be provided if the validation dataset has infinite cardinality at runtime.
+            log_conv2d_output (Optional[bool]): A boolean flag indicating whether the raw output of the Convolutional
+              layer specified by :attr:`_target_conv_layer_name` should be plotted and logged (sent northbound) to
+              WandB.
+            log_grad_cam_heatmaps (Optional[bool]): A boolean flag indicating whether the raw Grad-CAM heatmaps should
+              be plotted and logged (sent northbound) to WandB.
+            log_target_conv_layer_kernels (Optional[bool]): A boolean flag indicating whether the learned kernels of the
+              Convolutional layer specified by :attr:`_target_conv_layer_name` should be plotted and logged (sent
+              northbound) to WandB.
+            grad_cam_heatmap_alpha_value (Optional[float]): The alpha value to use when superimposing the Grad-CAM
+              heatmaps onto the source image. This value should be between 0 and 1, and defaults to ``0.4``.
+            seed (Optional[int]): The random seed to use for reproducibility.
+        """
+        self._num_images = num_images
+        self._num_classes = num_classes
+        self._wab_trial_run = wab_trial_run
+        self._target_conv_layer_name = target_conv_layer_name
+        self._validation_data = validation_data
+        self._validation_batch_size = validation_batch_size
+        self._validation_steps = validation_steps
+        self._log_conv2d_output = log_conv2d_output
+        self._log_grad_cam_heatmaps = log_grad_cam_heatmaps
+        self._log_target_conv_layer_kernels = log_target_conv_layer_kernels
+        self._grad_cam_heatmap_alpha_value = grad_cam_heatmap_alpha_value
+
+    def _grad_cam(self):
+        logger.debug(f"Generating Grad-CAM visuals for {self._num_images} images on the validation dataset...")
+        # Get image shape from the dataset (excluding the batch dimension):
+        if self._validation_batch_size is not None:
+            image_shape = tuple(self._validation_data.element_spec[0].shape[1:])
+        else:
+            image_shape = self._validation_data.element_spec[0].shape
+        # Check to see if the provided validation dataset is infinite:
+        if self._validation_data.cardinality().numpy() == tf.data.INFINITE_CARDINALITY:
+            if self._validation_steps is None:
+                raise ValueError(
+                    "Since the provided validation dataset is infinite, the number of validation steps "
+                    "must be specified.")
+        if self._validation_batch_size is not None:
+            self._validation_data = self._validation_data.unbatch()
+        num_correct_predictions = 0
+        correctly_predicted_random_images = np.zeros((self._num_images, *image_shape))
+        correctly_predicted_random_labels = np.zeros((self._num_images, 1))
+        for i, (image, label) in enumerate(self._validation_data):
+            # logger.debug(f"num_correct_predictions: {num_correct_predictions}")
+            # logger.debug(f"self._num_images: {self._num_images}")
+            # logger.debug(f"i: {i}")
+            if num_correct_predictions == self._num_images:
+                break
+            # Model expects input to be (None, width, height, num_channels) so prepend batch dimension:
+            image = tf.expand_dims(image, axis=0)
+            y_pred_prob = tf.squeeze(self.model(image, training=False), axis=-1)
+            y_pred = 0 if y_pred_prob <= 0.5 else 1
+            if y_pred == label.numpy():
+                correctly_predicted_random_images[num_correct_predictions] = image.numpy()
+                correctly_predicted_random_labels[num_correct_predictions] = label.numpy()
+                num_correct_predictions += 1
+        # Compute (and optionally log) the Grad-CAM heatmaps for the random validation set images:
+        heatmaps = self._get_grad_cam_activation_heatmap_for_images(
+            images=correctly_predicted_random_images, num_classes=self._num_classes,
+            log_heatmap=self._log_grad_cam_heatmaps, log_conv_output=self._log_grad_cam_heatmaps,
+            log_kernels=self._log_target_conv_layer_kernels
+        )
+        # Plot the Grad-CAM heatmaps on-top of the original images (e.g. the proper Grad-CAM visualization):
+        for i, image in enumerate(correctly_predicted_random_images):
+            heatmap = heatmaps[i]
+            # Rescale heatmap to range 0 - 255:
+            heatmap = np.uint8(255 * heatmap)
+            jet_cm = cm.get_cmap("jet")
+            # Replace the alpha channel with the constant heatmap alpha value:
+            jet_colors = jet_cm(np.arange(256))[:, :3]
+            # jet_heatmap = jet_colors[heatmap]
+            # jet_colors = jet_cm(np.arange(jet_cm.N))[...]
+            # jet_colors[:, -1] = np.full((jet_cm.N,), heatmap_alpha)
+            # custom_jet_cm = matplotlib.colors.ListedColormap(jet_colors)
+            jet_heatmap = jet_colors[heatmap]
+            # Create image with RGB colorized heatmap:
+            jet_heatmap = tf.keras.utils.array_to_img(jet_heatmap)
+            jet_heatmap = jet_heatmap.resize((image.shape[1], image.shape[0]))
+            jet_heatmap = tf.keras.utils.img_to_array(jet_heatmap)
+            # Superimpose the heatmap on original image:
+            superimposed_img = jet_heatmap * self._grad_cam_heatmap_alpha_value + (image * 255)
+            superimposed_img = tf.keras.utils.array_to_img(superimposed_img)
+            fig = plt.figure(num=1)
+            plt.grid(False)
+            plt.imshow(superimposed_img, cmap=jet_cm)
+            plt.suptitle(f"Grad-CAM at Layer {self._target_conv_layer_name}")
+            plt.colorbar()
+            # plt.show()
+            self._wab_trial_run.log({f'grad_cam_{self._target_conv_layer_name}': wab.Image(fig)})
+            plt.clf()
+            plt.close(fig)
+        # Re-batch the validation dataset if necessary:
+        if self._validation_batch_size is not None:
+            self._validation_data = self._validation_data.batch(batch_size=self._validation_batch_size)
+
+    def on_epoch_end(self, epoch, logs=None):
+        visualization_interval_in_epochs = 10
+        if epoch % visualization_interval_in_epochs == 0:
+            logger.debug(f"Logging Grad-CAM visuals at epoch {epoch} at a frequency of {visualization_interval_in_epochs} epochs.")
+            self._grad_cam()
+
+    def on_train_end(self, logs=None):
+        self._grad_cam()
+
+    def _get_grad_cam_activation_heatmap_for_images(
+            self, images: np.ndarray, num_classes: int, log_heatmap: Optional[bool] = False, log_conv_output: Optional[bool] = False,
+            log_kernels: Optional[bool] = False) -> np.ndarray:
+        """
+        Computes the Grad-CAM heatmaps for the provided images. The heatmaps are the results of Grad-CAM prior to
+        superposition on-top of the source image. This method will additionally optionally log the computed heatmaps to
+        WandB, as well as the raw output of the target convolutional layer specified by :attr:`_target_conv_layer_name`.
+
+        See Also:
+            - https://keras.io/examples/vision/grad_cam/
+            - Deep Learning with Python (book) by Francois Chollet
+
+        Args:
+            images (np.ndarray): A numpy array containing the images for which Grad-CAM heatmaps should be computed on.
+              Images are expected to be of shape: ``(width, height, num_channels)`` which excludes the batch dimension.
+            num_classes (int): The number of classes for the classification problem. Utilized by Grad-CAM to extract the
+              predicted probabilities for the target image.
+            log_heatmap (Optional[bool]): A boolean flag indicating whether the raw Grad-CAM heatmaps should be plotted
+              and logged (sent northbound) to WandB.
+            log_conv_output (Optional[bool]): A boolean flag indicating whether the raw output of the Convolutional
+              layer specified by :attr:`_target_conv_layer_name` should be plotted and logged (sent northbound) to
+              WandB.
+            log_kernels (Optional[bool]): A boolean flag indicating whether the learned kernels of the Convolutional
+              layer specified by :attr:`_target_conv_layer_name` should be plotted and logged (sent northbound) to
+              WandB.
+
+        Returns:
+
+        """
+        if log_kernels:
+            # Visualize the kernels for the target convolutional layer and upload to WandB.
+            last_conv_layer = self.model.get_layer(self._target_conv_layer_name)
+            num_kernels = last_conv_layer.kernel.shape[-2]
+            fig = plt.figure(num=1)
+            for i in range(num_kernels):
+                kern = last_conv_layer.kernel.numpy()[..., i, :]
+                plt.title(f"Kernel [{i + 1}/{num_kernels}]")
+                plt.imshow(kern, cmap='gray')
+                plt.colorbar()
+                plt.grid(None)
+                self._wab_trial_run.log({f'last_conv_layer_kernels': wab.Image(fig)})
+                # plt.show()
+                plt.clf()
+        target_conv_layer = self.model.get_layer(self._target_conv_layer_name)
+        conv_layer_output_activation_shape = target_conv_layer.output_shape[1:-1]
+        num_images = images.shape[0]
+        heatmaps = np.zeros((num_images, *conv_layer_output_activation_shape))
+        # New model to map the input image to the activations of the last conv layer as well as the output predictions:
+        grad_cam_model = tf.keras.Model(
+            self.model.inputs, [target_conv_layer.output, self.model.output], name='grad_cam_model'
+        )
+        pred_index = None
+        for i, image in enumerate(images):
+            image = np.expand_dims(image, axis=0)
+            # Compute the gradient of the top predicted class for the input image with respect to the activations of the
+            # last conv layer:
+            with tf.GradientTape() as tape:
+                last_conv_layer_output, preds = grad_cam_model(image, training=False)
+                # preds is now shape (num_classes, 1) and last_conv_layer_output is now shape (1, 112, 112, 1)
+                if pred_index is None:
+                    # The class index associated with the highest predicted probability:
+                    pred_index = tf.argmax(preds[0])
+                if num_classes > 2:
+                    # The predicted probability of the highest probability class:
+                    class_channel = preds[:, pred_index]
+                else:
+                    # The predicted probability of the highest probability class. Since we are doing binary
+                    # classification there is only one class to index into:
+                    class_channel = preds[0][0]
+            # The gradient of the output neuron (top predicted or chosen) with regard to the output feature map of the
+            # last conv layer:
+            grads = tape.gradient(class_channel, last_conv_layer_output)
+            # Create a vector where each entry is the mean intensity of the gradient over a specific feature map
+            # channel:
+            pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+            num_channels = last_conv_layer_output.shape[-1]
+            num_rows = 2
+            num_cols = 4
+            ''' Convolutional layer output for each kernel: '''
+            if log_conv_output:
+                fig = plt.figure(num=1)
+                if num_channels == 1:
+                    conv_output = last_conv_layer_output[0, ..., 0]
+                    plt.suptitle(f"{target_conv_layer.name} Output for Kernel")
+                    plt.imshow(conv_output, cmap='viridis', aspect='auto')
+                else:
+                    plt.suptitle(f"{target_conv_layer.name} Output for Each Kernel")
+                    # plt.suptitle(f"Conv Layer Output\nEvent: {event_type} on {date_str} at {time_str}")
+                    for j in range(num_channels):
+                        conv_output = last_conv_layer_output[0, ..., j]
+                        if j + 1 > num_rows * num_cols:
+                            break
+                        ax = plt.subplot(num_rows, num_cols, j + 1)
+                        ax.set_xticks(np.arange(0, image.shape[1], 25.0))
+                        ax.set_yticks(np.arange(0, image.shape[1], 25.0))
+                        ax.imshow(conv_output, cmap='viridis', aspect='auto')
+                        ax.title.set_text(f"k{j}")
+                plt.tight_layout()
+                # plt.show()
+                self._wab_trial_run.log({f'{target_conv_layer.name}_output': wab.Image(fig)})
+            # Multiply each channel in the feature map array by "how important this channel is" with regard to the top
+            # predicted class. Then sum all channels to obtain the heatmap class activation:
+            heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
+            heatmap = tf.squeeze(heatmap)
+            # Normalize the heatmap between 0 and 1 for visualization purposes:
+            heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+            # Plot the image for debugging purposes:
+            if log_heatmap:
+                plt.matshow(heatmap.numpy(), cmap='jet')
+                plt.title(f"{target_conv_layer.name} Grad-CAM Heatmap")
+                plt.colorbar()
+                plt.grid(None)
+                # plt.show()
+                fig = plt.gcf()
+                # Send northbound to WandB:
+                self._wab_trial_run.log({f'weight_heatmap_{target_conv_layer.name}': wab.Image(fig)})
+                plt.clf()
+                plt.close(fig)
+            heatmaps[i] = heatmap.numpy()
+        return heatmaps
