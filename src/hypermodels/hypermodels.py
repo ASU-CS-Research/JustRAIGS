@@ -158,6 +158,15 @@ class WaBHyperModel:
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
             exit(1)
+        # Parse target conv layer for visualizations during training:
+        visualization = wab.config['visualization']
+        visualization_logging_frequency_epochs = visualization['epoch_frequency']
+        if 'target_layer' in visualization:
+            target_conv_layer_name_to_visualize = visualization['target_layer']
+            logger.debug(f"Visualizations will target layer: {target_conv_layer_name_to_visualize}")
+        else:
+            target_conv_layer_name_to_visualize = None
+            logger.debug(f"No target layer specified for visualization during training.")
         # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
         model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
         # compile the model:
@@ -178,14 +187,17 @@ class WaBHyperModel:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
+                target_conv_layer_name_to_visualize=target_conv_layer_name_to_visualize,
+                visualization_frequency_epochs=visualization_logging_frequency_epochs
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
+                visualization_frequency_epochs=visualization_logging_frequency_epochs
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
@@ -193,7 +205,8 @@ class WaBHyperModel:
     @staticmethod
     def run_trial(
             model: Model, num_classes: int, wab_trial_run: Run, train_ds: Dataset, val_ds: Optional[Dataset],
-            test_ds: Dataset, num_epochs: int, num_images_to_visualize: int) -> History:
+            test_ds: Dataset, num_epochs: int, num_images_to_visualize: int, visualization_frequency_epochs: int,
+            target_conv_layer_name_to_visualize: Optional[str] = None) -> History:
         """
         Runs an individual trial (i.e. a unique set of hyperparameters) for the model as part of an overarching sweep.
         This method is responsible for training (i.e. fitting) the model, and maintaining a :class:`keras.callbacks.History`
@@ -213,9 +226,12 @@ class WaBHyperModel:
             test_ds (:class:`tf.data.Dataset`): The testing dataset (currently not used, but requested for the sake of
               consistency with other methods).
             num_epochs (int): The number of epochs to train the provided :class:`tf.keras.Model` for during fitting.
-            inference_target_conv_layer_name (str): The name of the target convolutional layer to be used for
-              visualization purposes.
             num_images_to_visualize (int): The number of images to plot for visualization purposes during training.
+            visualization_frequency_epochs (int): The frequency at which to compute and log visualizations during
+              training.
+            target_conv_layer_name_to_visualize (Optional[str]): The name of the target convolutional layer to be used
+              for visualization purposes. If this value is None then related callbacks (such as GradCAM) will not be
+              leveraged.
 
         Returns:
             :class:`keras.callbacks.History`: The history object containing the training and validation metrics for the
@@ -237,25 +253,32 @@ class WaBHyperModel:
         )
         # Declare custom Callbacks here:
         confusion_matrix_callback = ConfusionMatrixCallback(
-            num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=val_ds, validation_steps=None
+            num_classes=num_classes, wab_trial_run=wab_trial_run, validation_data=val_ds, validation_steps=None,
+            epoch_frequency=visualization_frequency_epochs
         )
         # Sample the same images from the validation set to use for callbacks during training:
         val_ds_for_visuals = val_ds.take(num_images_to_visualize).unbatch()
         # train_val_image_callback = TrainValImageCallback(
         #     wab_trial_run=wab_trial_run, train_data=train_ds, val_data=val_ds_for_visuals, num_images=6
         # )
-        grad_cam_callback = GradCAMCallback(
-            wab_trial_run=wab_trial_run, num_images=num_images_to_visualize, num_classes=num_classes,
-            target_conv_layer_name='conv2d_93',
-            validation_data=val_ds_for_visuals, validation_steps=None,
-            # validation_batch_size=val_ds_for_visuals.element_spec[1].shape[0],
-            validation_batch_size=None,
-            log_grad_cam_heatmaps=False
-        )
+        if target_conv_layer_name_to_visualize is not None:
+            grad_cam_callback = GradCAMCallback(
+                wab_trial_run=wab_trial_run, num_images=num_images_to_visualize, num_classes=num_classes,
+                target_conv_layer_name=target_conv_layer_name_to_visualize,
+                validation_data=val_ds_for_visuals, validation_steps=None,
+                # validation_batch_size=val_ds_for_visuals.element_spec[1].shape[0],
+                validation_batch_size=None,
+                log_grad_cam_heatmaps=False, epoch_frequency=visualization_frequency_epochs
+            )
+            callbacks = [wab_callback, confusion_matrix_callback, grad_cam_callback]
+        else:
+            callbacks = [wab_callback, confusion_matrix_callback]
+
+        logger.info(f"Callbacks: {callbacks}")
         # Fit the model and log the trial results to WaB:
         try:
             trial_history = model.fit(
-                train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=[wab_callback, confusion_matrix_callback, grad_cam_callback]
+                train_ds, validation_data=val_ds, epochs=num_epochs, callbacks=callbacks
             )
         except Exception as err:
             logger.exception(f"Exception occurred during trial run: {err}")
@@ -276,8 +299,9 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
     """
 
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
-                 batch_size: int, metrics: List[Metric]):
-        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name="EfficientNetB7")
+                 batch_size: int, metrics: List[Metric], num_images_to_visualize: Optional[int] = 6):
+        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics,
+                         hyper_model_name="EfficientNetB7", num_images_to_visualize=num_images_to_visualize)
 
     def construct_model_run_trial(self):
         """
@@ -330,6 +354,10 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
             exit(1)
+        visualizations = wab.config['visualization']
+        visualization_frequency_epochs = visualizations['epoch_frequency']
+        target_conv_layer_to_visualize = visualizations['target_layer']
+        logger.info(f"Logging visualizations at a frequency (epochs) of: {visualization_frequency_epochs}")
         # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
         model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
         # compile the model:
@@ -350,14 +378,18 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
+                visualization_frequency_epochs=visualization_frequency_epochs,
+                target_conv_layer_name_to_visualize=target_conv_layer_to_visualize
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'],
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
+                visualization_frequency_epochs=visualization_frequency_epochs,
+                target_conv_layer_name_to_visualize=target_conv_layer_to_visualize
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
@@ -428,6 +460,8 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
             exit(1)
+        visualizations = wab.config['visualization']
+        visualization_frequency_epochs = visualizations['epoch_frequency']
         # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
         model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
         # compile the model:
@@ -448,14 +482,16 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run, train_ds=self._train_ds,
                 val_ds=self._val_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
+                visualization_frequency_epochs=visualization_frequency_epochs
             )
         else:
             # Support for final training run performed after model selection process:
             self.run_trial(
                 model=model, num_classes=self._num_classes, wab_trial_run=wab_trial_run,
                 train_ds=self._train_ds, val_ds=self._test_ds, test_ds=self._test_ds,
-                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize
+                num_epochs=wab.config['num_epochs'], num_images_to_visualize=self._num_images_to_visualize,
+                visualization_frequency_epochs=visualization_frequency_epochs
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()

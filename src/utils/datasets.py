@@ -128,7 +128,7 @@ def load_datasets(
     train_dir_from_args = os.path.join(dirname_from_args, 'train')
     val_dir_from_args = os.path.join(dirname_from_args, 'val')
     test_dir_from_args = os.path.join(dirname_from_args, 'test')
-    if os.path.isdir(train_dir_from_args) and os.path.isdir(val_dir_from_args) and os.path.isdir(test_dir_from_args) and False:
+    if os.path.isdir(train_dir_from_args) and os.path.isdir(val_dir_from_args) and os.path.isdir(test_dir_from_args):
         logger.debug(f"Found existing saved dataset for the specified arguments! Loading tf.Datasets from: {dirname_from_args}.")
         train_ds = tf.data.Dataset.load(train_dir_from_args)
         val_ds = tf.data.Dataset.load(val_dir_from_args)

@@ -34,6 +34,13 @@
                 "value": 0.001
               }
             }
+          },
+          "visualization": {
+            "parameters": {
+              "epoch_frequency": {
+                "value": 10
+              }
+            }
           }
         }
       },
@@ -154,6 +161,16 @@
               }
             }
           },
+          "visualization": {
+            "parameters": {
+              "target_layer": {
+                "value": "conv2d_93"
+              },
+              "epoch_frequency": {
+                "value": 10
+              }
+            }
+          },
           "num_epochs": {
             "value": 100
           }
@@ -192,6 +209,16 @@
           },
           "num_thawed_layers": {
             "value": null
+          },
+          "visualization": {
+            "parameters": {
+              "target_layer": {
+                "value": "top_conv"
+              },
+              "epoch_frequency": {
+                "value": 10
+              }
+            }
           }
         }
       }
@@ -211,6 +238,16 @@
               },
               "channels": {
                 "value": 3
+              }
+            }
+          },
+          "visualization": {
+            "parameters": {
+              "target_layer": {
+                "value": "conv2d_93"
+              },
+              "epoch_frequency": {
+                "value": 10
               }
             }
           },

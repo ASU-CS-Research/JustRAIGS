@@ -28,7 +28,7 @@ class ConfusionMatrixCallback(Callback):
     """
 
     def __init__(
-            self, num_classes: int, wab_trial_run: Run, validation_data: Dataset,
+            self, num_classes: int, wab_trial_run: Run, validation_data: Dataset, epoch_frequency: int,
             validation_steps: Optional[int] = None):
         """
 
@@ -38,6 +38,8 @@ class ConfusionMatrixCallback(Callback):
             validation_data (Dataset): A tensorflow Dataset object containing the validation data. This dataset may or
               may not have infinite cardinality at runtime (as a result of oversampling). The dataset will yield (x, y)
               tuples of validation data.
+            epoch_frequency (int): The frequency (in epochs) at which the confusion matrix should be generated and
+              logged to WandB.
             validation_steps (Optional[int]): The number of steps/batches to be considered one epoch for the validation
               dataset. This value must be provided if the validation dataset has infinite cardinality at runtime.
 
@@ -45,16 +47,11 @@ class ConfusionMatrixCallback(Callback):
         self._num_classes = num_classes
         self._wab_trial_run = wab_trial_run
         self._validation_data = validation_data
+        self._epoch_frequency = epoch_frequency
         self._validation_steps = validation_steps
         super().__init__()
 
-    def on_train_end(self, logs=None):
-        """
-        Called by the Keras framework at the end of Model training. This method is responsible for computing the
-        Confusion Matrix on the validation dataset provided during callback initialization, and uploading the results
-        to WaB.
-
-        """
+    def _confusion_matrix(self):
         logger.debug(f"Generating confusion matrix for {self._num_classes} classes on the validation dataset...")
         # Check to see if the provided validation dataset is infinite:
         if self._validation_data.cardinality().numpy() == tf.data.INFINITE_CARDINALITY:
@@ -96,6 +93,20 @@ class ConfusionMatrixCallback(Callback):
         self._wab_trial_run.log({'confusion_matrix': wab.Image(fig)})
         plt.clf()
         plt.close(fig)
+
+    def on_epoch_end(self, epoch, logs=None):
+        if epoch % self._epoch_frequency == 0:
+            logger.debug(f"Logging confusion matrix at epoch {epoch} at a frequency of {self._epoch_frequency} epochs.")
+            self._confusion_matrix()
+
+    def on_train_end(self, logs=None):
+        """
+        Called by the Keras framework at the end of Model training. This method is responsible for computing the
+        Confusion Matrix on the validation dataset provided during callback initialization, and uploading the results
+        to WaB.
+
+        """
+        self._confusion_matrix()
 
 
 class TrainValImageCallback(Callback):
@@ -177,8 +188,7 @@ class GradCAMCallback(Callback):
 
     def __init__(
             self, num_images: int, num_classes: int, wab_trial_run: Run, target_conv_layer_name: str,
-            validation_data: Dataset,
-             validation_steps: Optional[int] = None,
+            validation_data: Dataset, epoch_frequency: int, validation_steps: Optional[int] = None,
             log_conv2d_output: Optional[bool] = False, log_grad_cam_heatmaps: Optional[bool] = False,
             log_target_conv_layer_kernels: Optional[bool] = False,
             grad_cam_heatmap_alpha_value: Optional[float] = 0.4, validation_batch_size: Optional[int] = None):
@@ -195,6 +205,8 @@ class GradCAMCallback(Callback):
             validation_data (Dataset): A tensorflow Dataset object containing the validation data. This dataset may or
               may not have infinite cardinality at runtime (as a result of oversampling). The dataset will yield (x, y)
               tuples of validation data.
+            epoch_frequency (int): The frequency (in epochs) at which Grad-CAM visuals should be generated and uploaded
+              to WandB.
             validation_batch_size (int): The number of images in a validation dataset batch. If None, it is expected
               that the validation dataset has already been unbatched.
             validation_steps (Optional[int]): The number of steps/batches to be considered one epoch for the validation
@@ -216,6 +228,7 @@ class GradCAMCallback(Callback):
         self._wab_trial_run = wab_trial_run
         self._target_conv_layer_name = target_conv_layer_name
         self._validation_data = validation_data
+        self._epoch_frequency = epoch_frequency
         self._validation_batch_size = validation_batch_size
         self._validation_steps = validation_steps
         self._log_conv2d_output = log_conv2d_output
@@ -295,9 +308,8 @@ class GradCAMCallback(Callback):
             self._validation_data = self._validation_data.batch(batch_size=self._validation_batch_size)
 
     def on_epoch_end(self, epoch, logs=None):
-        visualization_interval_in_epochs = 10
-        if epoch % visualization_interval_in_epochs == 0:
-            logger.debug(f"Logging Grad-CAM visuals at epoch {epoch} at a frequency of {visualization_interval_in_epochs} epochs.")
+        if epoch % self._epoch_frequency == 0:
+            logger.debug(f"Logging Grad-CAM visuals at epoch {epoch} at a frequency of {self._epoch_frequency} epochs.")
             self._grad_cam()
 
     def on_train_end(self, logs=None):

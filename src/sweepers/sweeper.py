@@ -92,7 +92,8 @@ def main():
             'accuracy', 'binary_accuracy', tf.keras.metrics.BinaryCrossentropy(from_logits=False),
             tf.keras.metrics.TruePositives(), tf.keras.metrics.TrueNegatives(), tf.keras.metrics.FalsePositives(),
             tf.keras.metrics.FalseNegatives()
-        ]
+        ],
+        num_images_to_visualize=2
     )
     # '''
     # For Feature Extraction with a CVAE:
