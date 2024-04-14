@@ -113,6 +113,7 @@ class ConfusionMatrixCallback(Callback):
         normalizer = colors.Normalize(vmin=min_count, vmax=max_count)
         # cbar_scalar_mappable = cm.ScalarMappable(norm=normalizer, cmap=sns.color_palette("rocket", as_cmap=True))
         fig = plt.figure(figsize=(40, 5))
+        plt.suptitle(f"Confusion Matrix at Epoch {epoch}")
         cax = fig.add_subplot(1, 11, 11)
         axes = []
         for i in range(self._num_classes):
@@ -143,7 +144,6 @@ class ConfusionMatrixCallback(Callback):
             ax.set_title(f"{index_to_label_map[i]}")
             axes.append(ax)
         plt.tight_layout()
-        # plt.suptitle(f"Confusion Matrix at Epoch {epoch}")
         # plt.show()
         self._wab_trial_run.log({'confusion_matrix': wab.Image(fig)})
         plt.clf()
