@@ -220,7 +220,7 @@ class InceptionV3WaBModel(Model):
         self._base_model = InceptionV3(
             include_top=False, weights='imagenet', input_shape=self._input_shape_no_batch, classes=self._num_classes
         )
-        # Freeze the base model:
+        # freeze the base model:
         for layer in self._base_model.layers:
             layer.trainable = False
         '''
@@ -248,6 +248,8 @@ class InceptionV3WaBModel(Model):
         optimizer_learning_rate = optimizer_config['learning_rate']
         if optimizer_type == 'adam':
             self._optimizer = Adam(learning_rate=optimizer_learning_rate)
+        elif optimizer_type == 'sgd':
+            self._optimizer = SGD(learning_rate=optimizer_learning_rate)
         else:
             self._optimizer = None
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
@@ -263,6 +265,7 @@ class InceptionV3WaBModel(Model):
             exit(1)
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
+        model_head = tf.keras.layers.Dense(512)(model_head)
         model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
         self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
         # Build the model:
@@ -382,6 +385,9 @@ class EfficientNetB7WaBModel(Model):
         self._base_model = EfficientNetB7(
             include_top=False, weights='imagenet', input_shape=self._input_shape_no_batch, classes=self._num_classes
         )
+        # freeze the base model:
+        for layer in self._base_model.layers:
+            layer.trainable = False
         '''
         Build the model with the hyperparameters for this particular trial:
         '''
@@ -420,35 +426,31 @@ class EfficientNetB7WaBModel(Model):
         loss_function = self._trial_hyperparameters['loss']
         if loss_function == 'binary_crossentropy':
             self._loss = BinaryCrossentropy(from_logits=False)
-        elif loss_function == 'categorical_crossentropy':
-            self._loss = CategoricalCrossentropy(from_logits=False)
+        # elif loss_function == 'categorical_crossentropy':
+        #     self._loss = CategoricalCrossentropy(from_logits=False)
         else:
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
             exit(1)
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
         model_head = Flatten()(self._base_model.outputs[0])
-        model_head = tf.keras.layers.Dense(512, activation='relu')(model_head)
+        model_head = tf.keras.layers.Dense(512)(model_head)
         model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
-        # self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
-        super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
+        self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
         # Build the model:
-        # self._model.build((None,) + self._input_shape_no_batch)
-        self.build((None,) + self._input_shape_no_batch)
+        self._model.build((None,) + self._input_shape_no_batch)
         # Log the model summary to WaB:
-        # self._wab_trial_run.log({"model_summary": self._model.summary()})
-        self._wab_trial_run.log({"model_summary": self.summary()})
+        self._wab_trial_run.log({"model_summary": self._model.summary()})
         # Compile the model:
-        # self._model.compile(loss=self._loss, optimizer=self._optimizer)
-        self.compile(loss=self._loss, optimizer=self._optimizer)
-        # super().__init__(*args, **kwargs)
+        self._model.compile(loss=self._loss, optimizer=self._optimizer)
+        super().__init__(*args, **kwargs)
 
     # @property
-    # def model(self):
-    #     return self._model
+    def model(self):
+        return self._model
 
-    # def call(self, inputs, training=None, mask=None):
-    #     return self._model(inputs, training=training, mask=mask)
+    def call(self, inputs, training=None, mask=None):
+        return self._model(inputs, training=training, mask=mask)
 
     def get_config(self):
         """

@@ -6,10 +6,10 @@
           "input_shape": {
             "parameters": {
               "width_px": {
-                "value": 64
+                "value": 128
               },
               "height_px": {
-                "value": 64
+                "value": 128
               },
               "channels": {
                 "value": 3
@@ -49,10 +49,10 @@
           "input_shape": {
             "parameters": {
               "width_px": {
-                "value": 64
+                "value": 128
               },
               "height_px": {
-                "value": 64
+                "value": 128
               },
               "channels": {
                 "value": 3
@@ -242,7 +242,7 @@
             }
           },
           "num_epochs": {
-            "value": 100
+            "value": 300
           },
           "visualization": {
             "parameters": {

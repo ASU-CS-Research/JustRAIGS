@@ -291,7 +291,6 @@ class WaBHyperModel:
             exit(1)
         return trial_history
 
-
 class EfficientNetB7WaBHyperModel(WaBHyperModel):
     """
     An example of a WaB Hypermodel that leverages the :class:`~src.models.models.EfficientNetB7WaBModel`. This class is
@@ -304,9 +303,13 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
     """
 
     def __init__(self, train_ds: Dataset, val_ds: Optional[Dataset], test_ds: Dataset, num_classes: int, training: bool,
-                 batch_size: int, metrics: List[Metric], num_images_to_visualize: Optional[int] = 6):
-        super().__init__(train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics,
-                         hyper_model_name="EfficientNetB7", num_images_to_visualize=num_images_to_visualize)
+                 batch_size: int, metrics: List[Metric], hyper_model_name: Optional[str] = "EfficientNetB7",
+                 num_images_to_visualize: Optional[int] = 6):
+        super().__init__(
+            train_ds, val_ds, test_ds, num_classes, training, batch_size, metrics, hyper_model_name=hyper_model_name,
+            num_images_to_visualize=num_images_to_visualize
+        )
+        self._hyper_model_type = ModelType.BINARY_CLASSIFICATION if num_classes == 2 else ModelType.MULTICLASS_CLASSIFICATION
 
     def construct_model_run_trial(self):
         """
@@ -343,8 +346,6 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
             optimizer = Adam(learning_rate=optimizer_learning_rate)
         elif optimizer_type == 'sgd':
             optimizer = SGD(learning_rate=optimizer_learning_rate)
-        elif optimizer_type == 'rmsprop':
-            optimizer = RMSprop(learning_rate=optimizer_learning_rate)
         else:
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
                          f"sweep configuration.")
@@ -353,8 +354,6 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
         loss_function = wab.config['loss']
         if loss_function == 'binary_crossentropy':
             loss = BinaryCrossentropy(from_logits=False)
-        elif loss_function == 'categorical_crossentropy':
-            loss = CategoricalCrossentropy(from_logits=False)
         else:
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
@@ -362,7 +361,6 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
         visualizations = wab.config['visualization']
         visualization_frequency_epochs = visualizations['epoch_frequency']
         target_conv_layer_to_visualize = visualizations['target_layer']
-        logger.info(f"Logging visualizations at a frequency (epochs) of: {visualization_frequency_epochs}")
         # .. todo:: Batch size should be known now? Is that why output of the layer is multiple in model.summary()?
         model.build(input_shape=(self._batch_size, *self._image_shape_no_batch_dim))
         # compile the model:
@@ -398,6 +396,7 @@ class EfficientNetB7WaBHyperModel(WaBHyperModel):
             )
         wab_trial_run.finish()
         tf.keras.backend.clear_session()
+
 
 
 class InceptionV3WaBHyperModel(WaBHyperModel):
@@ -453,6 +452,8 @@ class InceptionV3WaBHyperModel(WaBHyperModel):
         optimizer_learning_rate = optimizer_config['learning_rate']
         if optimizer_type == 'adam':
             optimizer = Adam(learning_rate=optimizer_learning_rate)
+        elif optimizer_type == 'sgd':
+            optimizer = SGD(learning_rate=optimizer_learning_rate)
         else:
             logger.error(f"Unknown optimizer type: {optimizer_type} provided in the hyperparameter section of the "
                          f"sweep configuration.")
