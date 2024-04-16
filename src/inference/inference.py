@@ -47,11 +47,16 @@ def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
         error_message = f"Model path: {model_path} is not a directory. Expecting a SavedModel format directory."
         print(error_message)
         raise ValueError(error_message)
+    # Need to import binary and muli-label
     model = tf.saved_model.load(model_path)
     inference = model.signatures["serving_default"]
     image_filename_and_callback_df = pd.DataFrame(inference_tasks(), columns=["image_filename", "callback"])
     image_filename_and_callback_df.adapt(image_preprocessing_fn)
+    #Convert to tf Dataset
+    predict_ds = tf.data.Dataset.from_tensor_slices(list(image_filename_and_callback_df["image_filename"]), list(image_filename_and_callback_df["callback"]))
+    # Predict
 
+    # Save results
 
 
 def _show_torch_cuda_info():
