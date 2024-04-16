@@ -154,7 +154,7 @@ if __name__ == '__main__':
     sweep configuration.
     """
     NUM_TRIALS = 100
-    BATCH_SIZE = 5
+    BATCH_SIZE = 64
     NUM_CLASSES = 10
     SEED = 42
     REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))

@@ -76,7 +76,7 @@
             "value": "binary_crossentropy"
           },
           "num_epochs": {
-            "value": 100
+            "value": 300
           }
         }
       },
@@ -272,6 +272,9 @@
                 "value": 0.01
               }
             }
+          },
+          "data_augmentation": {
+            "value": true
           }
         }
       },
