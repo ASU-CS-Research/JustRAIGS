@@ -5,6 +5,7 @@ import os
 import random
 import tensorflow as tf
 from src.utils.datasets import load_and_preprocess_image
+import pandas as pd
 
 
 def run():
@@ -48,8 +49,8 @@ def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
         raise ValueError(error_message)
     model = tf.saved_model.load(model_path)
     inference = model.signatures["serving_default"]
-    for jpg_image_file_name, save_prediction in inference_tasks():
-
+    image_filename_and_callback_df = pd.DataFrame(inference_tasks(), columns=["image_filename", "callback"])
+    image_filename_and_callback_df.adapt(image_preprocessing_fn)
 
 
 
