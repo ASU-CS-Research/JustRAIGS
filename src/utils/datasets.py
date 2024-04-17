@@ -324,12 +324,15 @@ def load_datasets(
     '''
     # Note: Consider enabling operation determinism if you need to debug something difficult, but this will slow
     # everything down drastically.
+    train_ds = train_ds.shuffle(buffer_size=train_ds.cardinality(), seed=seed, reshuffle_each_iteration=False)
     train_ds = train_ds.batch(
         batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
     )
+    val_ds = val_ds.shuffle(buffer_size=val_ds.cardinality(), seed=seed, reshuffle_each_iteration=False)
     val_ds = val_ds.batch(
         batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
     )
+    test_ds = test_ds.shuffle(buffer_size=test_ds.cardinality(), seed=seed, reshuffle_each_iteration=False)
     test_ds = test_ds.batch(
         batch_size=batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False
     )
@@ -381,7 +384,7 @@ def get_oversampled_dataset(data: Dataset, batch_size: int, seed: Optional[int] 
     shorter_repeat = shorter_ds.repeat(ratio)
     # logger.debug(f'New len of shorter_ds: {len(list(shorter_repeat.as_numpy_iterator()))}')
     total_repeat = longer_ds.concatenate(shorter_repeat)
-    total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
+    # total_repeat = total_repeat.shuffle(buffer_size=batch_size, seed=seed, reshuffle_each_iteration=False)
     # total_repeat = tf.data.Dataset.from_tensor_slices(total_repeat)
     num_examples = 0
     num_positive_labels = 0

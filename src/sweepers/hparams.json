@@ -210,10 +210,13 @@
           "num_thawed_layers": {
             "value": null
           },
+          "data_augmentation": {
+            "value": true
+          },
           "visualization": {
             "parameters": {
               "target_layer": {
-                "value": "top_conv"
+                "value": null
               },
               "epoch_frequency": {
                 "value": 10
