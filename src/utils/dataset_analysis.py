@@ -20,6 +20,18 @@ plt.bar(classifications, document[classifications].sum())
 # plt.legend()
 plt.tight_layout()
 plt.show()
+plt.clf()
+
+classifications = ['RG', 'NRG']
+pos_class = document[document['Final Label'] == 'RG']
+neg_class = document[document['Final Label'] == 'NRG']
+plt.title(f"Binary Class Distribution")
+plt.bar(classifications, [pos_class.shape[0], neg_class.shape[0]])
+plt.xlabel("Class")
+plt.ylabel("Number of Images")
+plt.tight_layout()
+plt.show()
+plt.clf()
 
 # with (open('src/utils/JustRAIGS_Train_labels.csv', 'r') as file):
 #
