@@ -1,6 +1,6 @@
 import numpy
 from PIL import Image
-from helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks
+from src.inference.helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks
 import os
 import random
 import tensorflow as tf
@@ -44,14 +44,18 @@ def run():
 def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
     _show_tf_cuda_info()
     if not os.path.isdir(model_path):
-        error_message = f"Model path: {model_path} is not a directory. Expecting a SavedModel format directory."
+        error_message = f"Model path: {model_path} is not a directory or does not have subfolders binary or multi. Expecting a SavedModel format directory."
         print(error_message)
         raise ValueError(error_message)
     # Need to import binary and muli-label
-    model = tf.saved_model.load(model_path)
-    inference = model.signatures["serving_default"]
+    bin_model = tf.saved_model.load(model_path + "/binary")
+    #multi_model = tf.saved_model.load(model_path + "/multi")
+    inference = bin_model.signatures["serving_default"]
     image_filename_and_callback_df = pd.DataFrame(inference_tasks(), columns=["image_filename", "callback"])
-    image_filename_and_callback_df.adapt(image_preprocessing_fn)
+    image_filename_and_callback_df.map(image_preprocessing_fn)
+    adr_set = set(image_filename_and_callback_df.map(id))
+    for addr in adr_set:
+        print(addr)
     #Convert to tf Dataset
     predict_ds = tf.data.Dataset.from_tensor_slices(list(image_filename_and_callback_df["image_filename"]), list(image_filename_and_callback_df["callback"]))
     # Predict
@@ -80,6 +84,6 @@ def _show_tf_cuda_info():
 
 
 if __name__ == "__main__":
-    MODEL_PATH = os.path.abspath("")
+    MODEL_PATH = os.path.abspath("saved_models")
     IMAGE_PREPROCESSING_FN = load_and_preprocess_image
     raise SystemExit(run_inference_tasks(MODEL_PATH, IMAGE_PREPROCESSING_FN))
