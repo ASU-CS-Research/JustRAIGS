@@ -269,13 +269,21 @@ class InceptionV3WaBModel(Model):
                 random_flip = tf.keras.layers.RandomFlip("horizontal_and_vertical")(input_layer)
                 random_rotate = tf.keras.layers.RandomRotation(0.2)(random_flip)
                 self._base_model = self._base_model(random_rotate)
+                # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
+                model_head = Flatten()(self._base_model.outputs[0])
+                model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+                super().__init__(*args, inputs=input_layer, outputs=model_head, **kwargs)
+            else:
+                # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
+                model_head = Flatten()(self._base_model.outputs[0])
+                model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+                super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
         else:
-            self._base_model = self._base_model(input_layer)
-        # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
-        model_head = Flatten()(self._base_model)
-        model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+            # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
+            model_head = Flatten()(self._base_model.outputs[0])
+            model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+            super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
         # self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
-        super().__init__(*args, inputs=input_layer, outputs=model_head, **kwargs)
         # Build the model:
         # self._model.build((None,) + self._input_shape_no_batch)
         self.build((None,) + self._input_shape_no_batch)
