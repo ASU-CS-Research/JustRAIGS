@@ -290,18 +290,6 @@ class InceptionV3WaBModel(Model):
     # def call(self, inputs, training=None, mask=None):
     #     return self._model(inputs, training=training, mask=mask)
 
-    @tf.function
-    def get_weights(self):
-        """
-        Returns the weights of the model. This method is used to ensure that the weights are saved correctly, needs
-        the @tf.function decorator to be called in the save method.
-
-        Returns:
-            np.ndarray: The weights of the model.
-
-        """
-        return self.get_weights()
-
     def get_config(self):
         """
         Utilized to return a serialized representation of the model. This is used when restoring the model from disk.
