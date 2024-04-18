@@ -269,13 +269,21 @@ class InceptionV3WaBModel(Model):
                 random_flip = tf.keras.layers.RandomFlip("horizontal_and_vertical")(input_layer)
                 random_rotate = tf.keras.layers.RandomRotation(0.2)(random_flip)
                 self._base_model = self._base_model(random_rotate)
+                # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
+                model_head = Flatten()(self._base_model.outputs[0])
+                model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+                super().__init__(*args, inputs=input_layer, outputs=model_head, **kwargs)
+            else:
+                # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
+                model_head = Flatten()(self._base_model.outputs[0])
+                model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+                super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
         else:
-            self._base_model = self._base_model(input_layer)
-        # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
-        model_head = Flatten()(self._base_model)
-        model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+            # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
+            model_head = Flatten()(self._base_model.outputs[0])
+            model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+            super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
         # self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
-        super().__init__(*args, inputs=input_layer, outputs=model_head, **kwargs)
         # Build the model:
         # self._model.build((None,) + self._input_shape_no_batch)
         self.build((None,) + self._input_shape_no_batch)
@@ -289,18 +297,6 @@ class InceptionV3WaBModel(Model):
 
     # def call(self, inputs, training=None, mask=None):
     #     return self._model(inputs, training=training, mask=mask)
-
-    @tf.function
-    def get_weights(self):
-        """
-        Returns the weights of the model. This method is used to ensure that the weights are saved correctly, needs
-        the @tf.function decorator to be called in the save method.
-
-        Returns:
-            np.ndarray: The weights of the model.
-
-        """
-        return self.get_weights()
 
     def get_config(self):
         """
@@ -476,12 +472,25 @@ class EfficientNetB7WaBModel(Model):
             logger.error(f"Unknown loss function: {loss_function} provided in the hyperparameter section of the sweep "
                          f"configuration.")
             exit(1)
+        # Add data augmentation layers
+        input_layer = tf.keras.Input(self._input_shape_no_batch)
+        if 'data_augmentation' in self._trial_hyperparameters:
+            data_augmentation = self._trial_hyperparameters['data_augmentation']
+            if data_augmentation:
+                random_flip = tf.keras.layers.RandomFlip("horizontal_and_vertical")(input_layer)
+                random_rotate = tf.keras.layers.RandomRotation(0.2)(random_flip)
+                self._base_model = self._base_model(random_rotate)
+        else:
+            self._base_model = self._base_model(input_layer)
         # Add a new head to the model (i.e. new Dense fully connected layer and softmax):
-        model_head = Flatten()(self._base_model.outputs[0])
+        model_head = Flatten()(self._base_model)
         model_head = tf.keras.layers.Dense(512, activation='relu')(model_head)
-        model_head = tf.keras.layers.Dense(self._num_classes, activation='sigmoid')(model_head)
+        if num_classes > 2:
+            model_head = tf.keras.layers.Dense(self._num_classes, activation='softmax')(model_head)
+        else:
+            model_head = tf.keras.layers.Dense(self._num_classes - 1, activation='sigmoid')(model_head)
         # self._model = Model(inputs=self._base_model.inputs, outputs=model_head)
-        super().__init__(*args, inputs=self._base_model.inputs, outputs=model_head, **kwargs)
+        super().__init__(*args, inputs=input_layer, outputs=model_head, **kwargs)
         # Build the model:
         # self._model.build((None,) + self._input_shape_no_batch)
         self.build((None,) + self._input_shape_no_batch)
@@ -532,6 +541,10 @@ class EfficientNetB7WaBModel(Model):
         logger.debug(f"save method received args: {args}")
         logger.debug(f"save method received kwargs: {kwargs}")
         saved_model_path = args[0]
+        if '.h5' in saved_model_path:
+            error_message = f"Unsupported save format: {saved_model_path}. Please save as a tf format."
+            logger.error(error_message)
+            raise AttributeError(error_message)
         # saved_model_path = saved_model_path.replace('.h5', '.keras')
         # overwrite = kwargs['overwrite']
         if 'save_format' in kwargs:
@@ -540,16 +553,19 @@ class EfficientNetB7WaBModel(Model):
             # When save_model is called with no save_format kwarg for the .h5 format:
             save_format = 'h5'
         if os.path.isfile(saved_model_path):
-            super().save(saved_model_path, **kwargs)
+            # super().save(saved_model_path, **kwargs)
+            super().save(saved_model_path, save_format=save_format)
             logger.debug(f"Overwrote and saved model to: {saved_model_path}")
         else:
-            super().save(saved_model_path, **kwargs)
+            os.makedirs(saved_model_path, exist_ok=True)
+            # super().save(saved_model_path, **kwargs)
+            super().save(saved_model_path, save_format=save_format)
             logger.debug(f"Saved model to: {saved_model_path}")
         if save_format == 'h5':
             # Load in saved model and run assertions:
             logger.debug(f"Loading saved model for weight assertion check...")
             loaded_model = tf.keras.models.load_model(
-                args[0], custom_objects={"EfficientNetB7WaBModel": EfficientNetB7WaBModel}
+                args[0], custom_objects={"InceptionV3WaBModel": WaBModel}
             )
             # loaded_model.compile(optimizer=self._trial_hyperparameters['optimizer'], loss='binary_crossentropy')
             error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
@@ -558,8 +574,25 @@ class EfficientNetB7WaBModel(Model):
             saved_model_artifact.add_file(saved_model_path)
             self._wab_trial_run.log_artifact(saved_model_artifact)
         elif save_format == 'tf':
-            logger.warning(f"TensorFlow model format (.tf) save-and-restore logic is not yet working. Anticipate an "
-                           f"un-deserializable model.")
+            # new_model = tf.keras.models.load_model(saved_model_path)
+            new_model = tf.saved_model.load(saved_model_path)
+            new_save_dir = os.path.join(saved_model_path, "..", "current_best_model")
+            os.system(f"cp -r {saved_model_path} {new_save_dir}")
+            # logger.debug(list(new_model.signatures.keys()))
+            error_message = f"Saved model random image assertion failed. Most likely the model was not saved correctly."
+            random_image = np.random.rand(1, self._input_shape_no_batch[0], self._input_shape_no_batch[1],
+                                          self._input_shape_no_batch[2])
+            random_image = tf.convert_to_tensor(random_image, dtype=tf.float32)
+            inference = new_model.signatures["serving_default"]
+            self_outputs = self.predict(random_image)
+            new_outputs = inference(random_image)["dense_1"]
+            # logger.debug(f'output dict keys: {new_outputs.keys()}')
+            # exit(1)
+            # logger.debug(f'output shape for self model: {self_outputs.shape}\noutput shape for new model: {new_outputs["dense"].shape}')
+            np.testing.assert_allclose(self_outputs, new_outputs), error_message
+            logger.debug(f"Saved model random image assertion passed.")
+            # error_message = f"Saved model weight assertion failed. Weights were most likely saved incorrectly"
+            # np.testing.assert_equal(self.get_weights(), new_model.get_weights()), error_message
         else:
             logger.error(f"Unsupported save_format: {save_format}. Model was not saved.")
 
