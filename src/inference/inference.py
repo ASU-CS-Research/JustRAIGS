@@ -49,17 +49,8 @@ def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
         print(error_message)
         raise ValueError(error_message)
     # Need to import binary and muli-label
-    bin_model = tf.saved_model.load(model_path + "/binary")
-    multi_model = tf.saved_model.load(model_path + "/multi")
-    binary_inference = bin_model.signatures["serving_default"] # output is a dictionary, use key: "dense_1" for binary
-    # Make sure this model is the correct one, it should output a single value
-    random_image = tf.random.uniform((1, *input_size_no_batch))
-    output = binary_inference(random_image)["dense_1"]
-    print(f"Loaded in binary inference model, got output shape: {output.numpy().shape} with value {output.numpy()}")
-    multi_inference = multi_model.signatures["serving_default"] # output is a dictionary, use key: "dense" for multi
-    # Make sure this model is the correct one, it should output ten values
-    output = multi_inference(random_image)["dense"]
-    print(f"Loaded in multi inference model, got output shape: {output.numpy().shape} with value {output.numpy()}")
+    bin_model = tf.keras.models.load_model(os.path.join(model_path, "binary"))
+    multi_model = tf.keras.models.load_model(os.path.join(model_path, "multi"))
     image_filename_and_callback_df = pd.DataFrame(inference_tasks(), columns=["image_filename", "callback"])
     image_filename_and_callback_df.map(image_preprocessing_fn)
     adr_set = set(image_filename_and_callback_df.map(id))
