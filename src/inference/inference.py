@@ -51,16 +51,18 @@ def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
     bin_model = tf.keras.models.load_model(os.path.join(model_path, "binary"))
     multi_model = tf.keras.models.load_model(os.path.join(model_path, "multi"))
     image_filename_and_callback_df = pd.DataFrame(inference_tasks(), columns=["image_filename", "callback"])
-    images_df = image_filename_and_callback_df[['image_filename', 'callback']].apply(
-        image_preprocessing_fn, axis=1, raw=True, result_type='expand', args=('test', False)
-    )
-    adr_set = set(image_filename_and_callback_df.apply(id))
-    for addr in adr_set:
-        print(addr)
+    image_series = image_filename_and_callback_df['image_filename'].apply(image_preprocessing_fn)
+    print(image_series)
+    # Only one callback function
     #Convert to tf Dataset
-    predict_ds = tf.data.Dataset.from_tensor_slices(list(image_filename_and_callback_df["image_filename"]), list(image_filename_and_callback_df["callback"]))
+    predict_ds = tf.data.Dataset.from_tensor_slices(list(image_series))
     # Predict
-
+    binary_pred = bin_model.predict(predict_ds)
+    for(res in enumerate(binary_pred)):
+       is_RG = res > 0.5
+       likelyhood_RG = res
+       features = pass if is_RG else None
+       
     # Save results
 
 

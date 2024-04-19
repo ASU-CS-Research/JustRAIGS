@@ -36,7 +36,20 @@ def inference_tasks():
     is_referable_glaucoma_likelihood_stacked = []
     glaucomatous_features_stacked = []
 
-    def save_prediction(
+    for file_path in input_files:
+        if file_path.suffix == ".mha" or file_path.suffix == ".JPG":  # A single image
+            yield file_path, save_prediction #single_file_inference(image_file=file_path, callback=save_prediction)
+        elif file_path.suffix == ".tiff":  # A stack of images
+            yield from stack_inference(stack=file_path, callback=save_prediction) # need to modify this line
+
+    write_referable_glaucoma_decision(is_referable_glaucoma_stacked)
+    write_referable_glaucoma_decision_likelihood(
+        is_referable_glaucoma_likelihood_stacked
+    )
+    write_glaucomatous_features(glaucomatous_features_stacked)
+
+# Moved from inference_tasks method
+def save_prediction(
             is_referable_glaucoma,
             likelihood_referable_glaucoma,
             glaucomatous_features=None,
@@ -47,18 +60,6 @@ def inference_tasks():
             glaucomatous_features_stacked.append({**DEFAULT_GLAUCOMATOUS_FEATURES, **glaucomatous_features})
         else:
             glaucomatous_features_stacked.append(DEFAULT_GLAUCOMATOUS_FEATURES)
-
-    for file_path in input_files:
-        if file_path.suffix == ".mha":  # A single image
-            yield from single_file_inference(image_file=file_path, callback=save_prediction)
-        elif file_path.suffix == ".tiff":  # A stack of images
-            yield from stack_inference(stack=file_path, callback=save_prediction)
-
-    write_referable_glaucoma_decision(is_referable_glaucoma_stacked)
-    write_referable_glaucoma_decision_likelihood(
-        is_referable_glaucoma_likelihood_stacked
-    )
-    write_glaucomatous_features(glaucomatous_features_stacked)
 
 
 def single_file_inference(image_file, callback):
@@ -132,7 +133,7 @@ def write_glaucomatous_features(result):
         f.write(json.dumps(result))
 
 
-def load_and_preprocess_image(*args, **kwargs) -> Tuple[Union[np.ndarray, float], int]:
+def load_and_preprocess_image(*args, **kwargs) -> Union[np.ndarray, float]:
     """
     Loads an image into a :class:`~numpy.ndarray` preprocess it, return the label as an :class:`int`.
 
