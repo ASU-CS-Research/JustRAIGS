@@ -42,6 +42,7 @@ def run():
 
 
 def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
+    input_size_no_batch = (75, 75, 3)
     _show_tf_cuda_info()
     if not os.path.isdir(model_path):
         error_message = f"Model path: {model_path} is not a directory or does not have subfolders binary or multi. Expecting a SavedModel format directory."
@@ -49,8 +50,16 @@ def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
         raise ValueError(error_message)
     # Need to import binary and muli-label
     bin_model = tf.saved_model.load(model_path + "/binary")
-    #multi_model = tf.saved_model.load(model_path + "/multi")
-    inference = bin_model.signatures["serving_default"]
+    multi_model = tf.saved_model.load(model_path + "/multi")
+    binary_inference = bin_model.signatures["serving_default"] # output is a dictionary, use key: "dense_1" for binary
+    # Make sure this model is the correct one, it should output a single value
+    random_image = tf.random.uniform((1, *input_size_no_batch))
+    output = binary_inference(random_image)["dense_1"]
+    print(f"Loaded in binary inference model, got output shape: {output.numpy().shape} with value {output.numpy()}")
+    multi_inference = multi_model.signatures["serving_default"] # output is a dictionary, use key: "dense" for multi
+    # Make sure this model is the correct one, it should output ten values
+    output = multi_inference(random_image)["dense"]
+    print(f"Loaded in multi inference model, got output shape: {output.numpy().shape} with value {output.numpy()}")
     image_filename_and_callback_df = pd.DataFrame(inference_tasks(), columns=["image_filename", "callback"])
     image_filename_and_callback_df.map(image_preprocessing_fn)
     adr_set = set(image_filename_and_callback_df.map(id))
@@ -78,8 +87,7 @@ def _show_tf_cuda_info():
     print("=+=" * 10)
     print(f"TF CUDA is available: {(available := tf.test.is_built_with_cuda())}")
     if available:
-        print(f"\tTF CUDA is available: {(available := tf.test.is_gpu_available())}")
-        print(f"\tTF CUDA is available: {(available := tf.config.list_physical_devices('GPU'))}")
+        print(f"TF CUDA is available: {(available := tf.config.list_physical_devices('GPU'))}")
     print("=+=" * 10)
 
 
