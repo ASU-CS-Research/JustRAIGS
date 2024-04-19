@@ -1,10 +1,14 @@
 import json
+import os
 import tempfile
 from pathlib import Path
 from pprint import pprint
-
+import numpy as np
+from typing import Tuple, Union
 import SimpleITK as sitk
 from PIL import Image
+import keras
+
 
 DEFAULT_GLAUCOMATOUS_FEATURES = {
     "appearance neuroretinal rim superiorly": None,
@@ -19,9 +23,11 @@ DEFAULT_GLAUCOMATOUS_FEATURES = {
     "large cup": None,
 }
 
+INPUT_DIR = os.path.abspath("src/inference/input") # Change these back to /input and /output before turning it in
+OUTPUT_DIR = os.path.abspath("src/inference/output")
 
 def inference_tasks():
-    input_files = [x for x in Path("/input").rglob("*") if x.is_file()]
+    input_files = [x for x in Path(INPUT_DIR).rglob("*") if x.is_file()]
 
     print("Input Files:")
     pprint(input_files)
@@ -112,15 +118,57 @@ def stack_inference(stack, callback):
 
 
 def write_referable_glaucoma_decision(result):
-    with open(f"/output/multiple-referable-glaucoma-binary.json", "w") as f:
+    with open(os.path.join(OUTPUT_DIR,"multiple-referable-glaucoma-binary.json"), "w") as f:
         f.write(json.dumps(result))
 
 
 def write_referable_glaucoma_decision_likelihood(result):
-    with open(f"/output/multiple-referable-glaucoma-likelihoods.json", "w") as f:
+    with open(os.path.join(OUTPUT_DIR,"multiple-referable-glaucoma-likelihoods.json"), "w") as f:
         f.write(json.dumps(result))
 
 
 def write_glaucomatous_features(result):
-    with open(f"/output/stacked-referable-glaucomatous-features.json", "w") as f:
+    with open(os.path.join(OUTPUT_DIR, "stacked-referable-glaucomatous-features.json"), "w") as f:
         f.write(json.dumps(result))
+
+
+def load_and_preprocess_image(*args, **kwargs) -> Tuple[Union[np.ndarray, float], int]:
+    """
+    Loads an image into a :class:`~numpy.ndarray` preprocess it, return the label as an :class:`int`.
+
+    .. todo:: Add preprocessing logic here. Convert to grayscale, downsample, etc.
+
+    Args:
+        *args: Variable length argument list. The inputs depend on the :class:`~pandas.DataFrame` object (or
+          :class:`~pandas.Series`) that the :meth:`~pandas.DataFrame.apply` method is called on.
+        **kwargs: Arbitrary keyword arguments. The inputs depend on the :class:`~pandas.DataFrame` object (or
+          :class:`~pandas.Series`) that the :meth:`~pandas.DataFrame.apply` method is called on.
+
+    Within Args:
+        color_mode:
+        target_size:
+        interpolation:
+        keep_aspect_ratio:
+
+    Returns:
+        Tuple[tf.Tensor, tf.Tensor]: A tuple containing the image and its corresponding label.
+
+    See Also:
+        - https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.apply.html#pandas.DataFrame.apply
+        - https://keras.io/api/data_loading/image/#loadimg-function
+
+    """
+    image_abs_path = args[0]
+
+    # logger.debug(f"load_img: {image_abs_path}")
+    try:
+        image = keras.utils.load_img(
+            image_abs_path, color_mode='rgb', target_size=(75, 75, 3), interpolation='bilinear',
+            keep_aspect_ratio=False
+        )
+    except Exception as e:
+        print(f"Failed to load image: {image_abs_path}")
+        print(f"Error: {e}")
+        return float('nan')
+    image = keras.utils.img_to_array(image)
+    return image

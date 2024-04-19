@@ -1,10 +1,9 @@
 import numpy
 from PIL import Image
-from src.inference.helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks
+from src.inference.helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks,load_and_preprocess_image
 import os
 import random
 import tensorflow as tf
-from src.utils.datasets import load_and_preprocess_image
 import pandas as pd
 
 
@@ -52,8 +51,10 @@ def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
     bin_model = tf.keras.models.load_model(os.path.join(model_path, "binary"))
     multi_model = tf.keras.models.load_model(os.path.join(model_path, "multi"))
     image_filename_and_callback_df = pd.DataFrame(inference_tasks(), columns=["image_filename", "callback"])
-    image_filename_and_callback_df.map(image_preprocessing_fn)
-    adr_set = set(image_filename_and_callback_df.map(id))
+    images_df = image_filename_and_callback_df[['image_filename', 'callback']].apply(
+        image_preprocessing_fn, axis=1, raw=True, result_type='expand', args=('test', False)
+    )
+    adr_set = set(image_filename_and_callback_df.apply(id))
     for addr in adr_set:
         print(addr)
     #Convert to tf Dataset
