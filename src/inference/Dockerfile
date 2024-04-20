@@ -42,13 +42,14 @@ RUN apt update && apt install -y python3 python3-pip && rm -rf /var/lib/apt/list
 # Ensures that Python output to stdout/stderr is not buffered: prevents missing information when terminating
 ENV PYTHONUNBUFFERED 1
 
-WORKDIR /opt/app
+WORKDIR /app
 COPY requirements.txt /opt/app
 
 RUN pip install --upgrade pip setuptools wheel
 RUN pip install h5py --only-binary=h5py
 RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install SimpleITK
 
-COPY . /opt/app
+COPY . /app
 
-ENTRYPOINT ["python", "inference.py"]
+ENTRYPOINT ["python3", "inference.py"]
