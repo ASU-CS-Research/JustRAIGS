@@ -48,7 +48,8 @@ COPY requirements.txt /opt/app
 RUN pip install --upgrade pip setuptools wheel
 RUN pip install h5py --only-binary=h5py
 RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install SimpleITK
 
-COPY . /opt/app
+COPY . /app
 
-ENTRYPOINT ["python", "inference.py"]
+ENTRYPOINT ["python3", "inference.py"]

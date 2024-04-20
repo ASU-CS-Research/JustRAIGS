@@ -1,6 +1,6 @@
 import numpy
 from PIL import Image
-from src.inference.helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks,load_and_preprocess_image, save_predictions, append_prediction 
+from helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks,load_and_preprocess_image, save_predictions, append_prediction
 import os
 import random
 import tensorflow as tf
