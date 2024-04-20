@@ -26,30 +26,31 @@ DEFAULT_GLAUCOMATOUS_FEATURES = {
 INPUT_DIR = os.path.abspath("src/inference/input") # Change these back to /input and /output before turning it in
 OUTPUT_DIR = os.path.abspath("src/inference/output")
 
+
+is_referable_glaucoma_stacked = []
+is_referable_glaucoma_likelihood_stacked = []
+glaucomatous_features_stacked = []
+
 def inference_tasks():
     input_files = [x for x in Path(INPUT_DIR).rglob("*") if x.is_file()]
 
     print("Input Files:")
     pprint(input_files)
 
-    is_referable_glaucoma_stacked = []
-    is_referable_glaucoma_likelihood_stacked = []
-    glaucomatous_features_stacked = []
-
     for file_path in input_files:
         if file_path.suffix == ".mha" or file_path.suffix == ".JPG":  # A single image
-            yield file_path, save_prediction #single_file_inference(image_file=file_path, callback=save_prediction)
+            yield file_path, append_prediction #single_file_inference(image_file=file_path, callback=save_prediction)
         elif file_path.suffix == ".tiff":  # A stack of images
-            yield from stack_inference(stack=file_path, callback=save_prediction) # need to modify this line
+            yield from stack_inference(stack=file_path, callback=append_prediction) # need to modify this line
 
-    write_referable_glaucoma_decision(is_referable_glaucoma_stacked)
-    write_referable_glaucoma_decision_likelihood(
-        is_referable_glaucoma_likelihood_stacked
-    )
-    write_glaucomatous_features(glaucomatous_features_stacked)
+    #write_referable_glaucoma_decision(is_referable_glaucoma_stacked)
+    #write_referable_glaucoma_decision_likelihood(
+    #    is_referable_glaucoma_likelihood_stacked
+    #)
+    #write_glaucomatous_features(glaucomatous_features_stacked)
 
 # Moved from inference_tasks method
-def save_prediction(
+def append_prediction(
             is_referable_glaucoma,
             likelihood_referable_glaucoma,
             glaucomatous_features=None,
@@ -60,6 +61,14 @@ def save_prediction(
             glaucomatous_features_stacked.append({**DEFAULT_GLAUCOMATOUS_FEATURES, **glaucomatous_features})
         else:
             glaucomatous_features_stacked.append(DEFAULT_GLAUCOMATOUS_FEATURES)
+
+#moved from inference_tasks method
+def save_predictions():
+    write_referable_glaucoma_decision(is_referable_glaucoma_stacked)
+    write_referable_glaucoma_decision_likelihood(
+        is_referable_glaucoma_likelihood_stacked
+    )
+    write_glaucomatous_features(glaucomatous_features_stacked)
 
 
 def single_file_inference(image_file, callback):

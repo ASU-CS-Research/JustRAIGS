@@ -1,6 +1,6 @@
 import numpy
 from PIL import Image
-from src.inference.helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks,load_and_preprocess_image
+from src.inference.helper import DEFAULT_GLAUCOMATOUS_FEATURES, inference_tasks,load_and_preprocess_image, save_predictions, append_prediction 
 import os
 import random
 import tensorflow as tf
@@ -55,16 +55,21 @@ def run_inference_tasks(model_path: str, image_preprocessing_fn: callable):
     print(image_series)
     # Only one callback function
     #Convert to tf Dataset
-    predict_ds = tf.data.Dataset.from_tensor_slices(list(image_series))
+    predict_ds = tf.data.Dataset.from_tensor_slices(list(image_series)).batch(10)
     # Predict
     binary_pred = bin_model.predict(predict_ds)
-    for(res in enumerate(binary_pred)):
-       is_RG = res > 0.5
-       likelyhood_RG = res
-       features = pass if is_RG else None
-       
-    # Save results
-
+    binary_pred = list(map(float, binary_pred))
+    multi_pred = multi_model.predict(predict_ds)
+    for i, res in enumerate(binary_pred):
+        is_RG = res > 0.5
+        likelyhood_RG = res
+        features = None
+        if is_RG:
+            feature_values = list([bool(p > 0.5) for p in multi_pred[i]]) # converts np bool to python bool typr. bool_ not JSON compatable
+            features = dict(zip(DEFAULT_GLAUCOMATOUS_FEATURES.keys(), feature_values))
+        # Save results
+        append_prediction(is_RG, res, features)
+    save_predictions()
 
 def _show_torch_cuda_info():
     import torch
