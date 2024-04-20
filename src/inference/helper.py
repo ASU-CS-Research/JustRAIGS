@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
+import shutil
 from pprint import pprint
 import numpy as np
 from typing import Tuple, Union
@@ -25,7 +26,7 @@ DEFAULT_GLAUCOMATOUS_FEATURES = {
 
 INPUT_DIR = os.path.abspath("src/inference/input") # Change these back to /input and /output before turning it in
 OUTPUT_DIR = os.path.abspath("src/inference/output")
-
+TEMP_DIR = os.path.abspath("tmp")
 
 is_referable_glaucoma_stacked = []
 is_referable_glaucoma_likelihood_stacked = []
@@ -38,8 +39,10 @@ def inference_tasks():
     pprint(input_files)
 
     for file_path in input_files:
-        if file_path.suffix == ".mha" or file_path.suffix == ".JPG":  # A single image
+        if file_path.suffix == ".JPG":  # A single image
             yield file_path, append_prediction #single_file_inference(image_file=file_path, callback=save_prediction)
+        elif file_path.suffix == ".mba":
+            yield from single_file_inference(file_path, append_prediction)
         elif file_path.suffix == ".tiff":  # A stack of images
             yield from stack_inference(stack=file_path, callback=append_prediction) # need to modify this line
 
@@ -69,62 +72,68 @@ def save_predictions():
         is_referable_glaucoma_likelihood_stacked
     )
     write_glaucomatous_features(glaucomatous_features_stacked)
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR)
 
 
 def single_file_inference(image_file, callback):
-    with tempfile.TemporaryDirectory() as temp_dir:
-        image = sitk.ReadImage(image_file)
+    if not os.path.exists(TEMP_DIR):
+        os.mkdir(TEMP_DIR)
 
-        # Define the output file path
-        output_path = Path(temp_dir) / "image.jpg"
+    image = sitk.ReadImage(image_file)
 
-        # Save the 2D slice as a JPG file
-        sitk.WriteImage(image, str(output_path))
+    # Define the output file path
+    output_path = Path(temp_dir) / "image.jpg"
 
-        # Call back that saves the result
-        def save_prediction(
-            is_referable_glaucoma,
-            likelihood_referable_glaucoma,
-            glaucomatous_features=None,
-        ):
-            glaucomatous_features = (
-                glaucomatous_features or DEFAULT_GLAUCOMATOUS_FEATURES
-            )
-            write_referable_glaucoma_decision([is_referable_glaucoma])
-            write_referable_glaucoma_decision_likelihood(
-                [likelihood_referable_glaucoma]
-            )
-            write_glaucomatous_features(
-                [{**DEFAULT_GLAUCOMATOUS_FEATURES, **glaucomatous_features}]
-            )
+    # Save the 2D slice as a JPG file
+    sitk.WriteImage(image, str(output_path))
 
-        yield output_path, callback
+    # Call back that saves the result
+    def save_prediction(
+        is_referable_glaucoma,
+        likelihood_referable_glaucoma,
+        glaucomatous_features=None,
+    ):
+        glaucomatous_features = (
+            glaucomatous_features or DEFAULT_GLAUCOMATOUS_FEATURES
+        )
+        write_referable_glaucoma_decision([is_referable_glaucoma])
+        write_referable_glaucoma_decision_likelihood(
+            [likelihood_referable_glaucoma]
+        )
+        write_glaucomatous_features(
+            [{**DEFAULT_GLAUCOMATOUS_FEATURES, **glaucomatous_features}]
+        )
+
+    yield output_path, callback
 
 
 def stack_inference(stack, callback):
     de_stacked_images = []
 
     # Unpack the stack
-    with tempfile.TemporaryDirectory() as temp_dir:
-        with Image.open(stack) as tiff_image:
+    if not os.path.exists(TEMP_DIR):
+        os.mkdir(TEMP_DIR)
+    #with tempfile.TemporaryDirectory() as temp_dir:
+    with Image.open(stack) as tiff_image:
 
-            # Iterate through all pages
-            for page_num in range(tiff_image.n_frames):
-                # Select the current page
-                tiff_image.seek(page_num)
+        # Iterate through all pages
+        for page_num in range(tiff_image.n_frames):
+            # Select the current page
+            tiff_image.seek(page_num)
 
-                # Define the output file path
-                output_path = Path(temp_dir) / f"image_{page_num + 1}.jpg"
-                tiff_image.save(output_path, "JPEG")
+            # Define the output file path
+            output_path = Path(TEMP_DIR) / f"image_{page_num + 1}.jpg"
+            tiff_image.save(output_path, "JPEG")
 
-                de_stacked_images.append(output_path)
+            de_stacked_images.append(output_path)
 
-                print(f"De-Stacked {output_path}")
+            print(f"De-Stacked {output_path}")
 
         # Loop over the images, and generate the actual tasks
-        for index, image in enumerate(de_stacked_images):
-            # Call back that saves the result
-            yield image, callback
+    for index, image in enumerate(de_stacked_images):
+        # Call back that saves the result
+        yield image, callback
 
 
 def write_referable_glaucoma_decision(result):
