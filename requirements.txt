@@ -119,7 +119,7 @@ paramiko==2.9.3
 parso==0.8.1
 pexpect==4.8.0
 pickleshare==0.7.5
-Pillow==9.0.1
+Pillow==10.3.0
 platformdirs==2.5.1
 pluggy==0.13.0
 ply==3.11
