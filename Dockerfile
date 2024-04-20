@@ -50,6 +50,12 @@ RUN pip install h5py --only-binary=h5py
 RUN pip3 install --no-cache-dir -r requirements.txt
 RUN pip3 install SimpleITK
 
-COPY . /opt/app
+ENV PYTHONPATH "${PYTHONPATH}:/opt/app"
 
-ENTRYPOINT ["python3", "inference.py"]
+COPY . /opt/app
+#COPY ./src/inference/helper.py /opt/app/src/inference/helper.py
+#COPY ./src/inference/inference.py /opt/app/src/inference/inference.py
+#COPY ./test/ /opt/app/test/
+
+ENTRYPOINT ["python3", "src/inference/inference.py"]
+#ENTRYPOINT ["python3"]

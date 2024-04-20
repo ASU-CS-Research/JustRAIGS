@@ -9,7 +9,10 @@ from typing import Tuple, Union
 import SimpleITK as sitk
 from PIL import Image
 import keras
+from loguru import logger
 
+REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), '../../../'))
+logger.debug(f"REPO_ROOT_DIR: {REPO_ROOT_DIR}")
 
 DEFAULT_GLAUCOMATOUS_FEATURES = {
     "appearance neuroretinal rim superiorly": None,
@@ -24,8 +27,10 @@ DEFAULT_GLAUCOMATOUS_FEATURES = {
     "large cup": None,
 }
 
-INPUT_DIR = os.path.abspath("src/inference/input") # Change these back to /input and /output before turning it in
-OUTPUT_DIR = os.path.abspath("src/inference/output")
+INPUT_DIR = os.path.abspath(os.path.join(REPO_ROOT_DIR, "test/input")) # Change these back to /input and /output before turning it in
+OUTPUT_DIR = os.path.abspath(os.path.join(REPO_ROOT_DIR, "test/output"))
+logger.debug(f"INPUT_DIR: {INPUT_DIR}")
+logger.debug(f"OUTPUT_DIR: {OUTPUT_DIR}")
 TEMP_DIR = os.path.abspath("tmp")
 
 is_referable_glaucoma_stacked = []
@@ -83,7 +88,7 @@ def single_file_inference(image_file, callback):
     image = sitk.ReadImage(image_file)
 
     # Define the output file path
-    output_path = Path(temp_dir) / "image.jpg"
+    output_path = Path(TEMP_DIR) / "image.jpg"
 
     # Save the 2D slice as a JPG file
     sitk.WriteImage(image, str(output_path))
