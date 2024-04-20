@@ -92,6 +92,7 @@ def _show_tf_cuda_info():
 
 
 if __name__ == "__main__":
-    MODEL_PATH = os.path.abspath("saved_models")
+    REPO_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    MODEL_PATH = os.path.abspath(os.path.join(REPO_ROOT_DIR, "src/inference/saved_models"))
     IMAGE_PREPROCESSING_FN = load_and_preprocess_image
     raise SystemExit(run_inference_tasks(MODEL_PATH, IMAGE_PREPROCESSING_FN))
