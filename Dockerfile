@@ -52,7 +52,15 @@ RUN pip3 install SimpleITK
 
 ENV PYTHONPATH "${PYTHONPATH}:/opt/app"
 
-COPY . /opt/app
+#COPY . /opt/app
+COPY ./src/inference/saved_models/ /opt/app/src/inference/saved_models/
+COPY ./src/inference/__init__.py /opt/app/src/inference/__init__.py
+COPY ./src/inference/control /opt/app/src/inference/control
+COPY ./src/inference/helper.py /opt/app/src/inference/helper.py
+COPY ./src/inference/inference.py /opt/app/src/inference/inference.py
+COPY ./src/inference/lambda.gpg /opt/app/src/inference/lambda.gpg
+COPY ./test/ /opt/app/test/
+
 #COPY ./src/inference/helper.py /opt/app/src/inference/helper.py
 #COPY ./src/inference/inference.py /opt/app/src/inference/inference.py
 #COPY ./test/ /opt/app/test/

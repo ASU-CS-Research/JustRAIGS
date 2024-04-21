@@ -27,8 +27,8 @@ DEFAULT_GLAUCOMATOUS_FEATURES = {
     "large cup": None,
 }
 
-INPUT_DIR = os.path.abspath(os.path.join(REPO_ROOT_DIR, "test/input")) # Change these back to /input and /output before turning it in
-OUTPUT_DIR = os.path.abspath(os.path.join(REPO_ROOT_DIR, "test/output"))
+INPUT_DIR = os.path.abspath(os.path.join(REPO_ROOT_DIR, "/input")) # Change these back to /input and /output before turning it in
+OUTPUT_DIR = os.path.abspath(os.path.join(REPO_ROOT_DIR, "/output"))
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
 logger.debug(f"INPUT_DIR: {INPUT_DIR}")
