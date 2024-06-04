@@ -245,6 +245,7 @@ class WaBHyperModel:
             verbose=1,
             save_model=True,
             save_graph=True,
+            save_model_as_artifiact=True,
             # generator=val_ds,
             # validation_steps=resampled_val_steps_per_epoch,
             # input_type='image',

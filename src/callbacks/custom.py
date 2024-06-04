@@ -56,7 +56,7 @@ class ConfusionMatrixCallback(Callback):
         self._validation_steps = validation_steps
         super().__init__()
 
-    def _multilabel_confusion_matrix(self, epoch: int):
+    def _multilabel_confusion_matrix(self, epoch: Optional[int] = None):
         logger.debug(f"Generating confusion matrix for {self._num_classes} classes on the validation dataset...")
         # Check to see if the provided validation dataset is infinite:
         if self._validation_data.cardinality().numpy() == tf.data.INFINITE_CARDINALITY:
@@ -113,7 +113,11 @@ class ConfusionMatrixCallback(Callback):
         normalizer = colors.Normalize(vmin=min_count, vmax=max_count)
         # cbar_scalar_mappable = cm.ScalarMappable(norm=normalizer, cmap=sns.color_palette("rocket", as_cmap=True))
         fig = plt.figure(figsize=(40, 5))
-        plt.suptitle(f"Confusion Matrix at Epoch {epoch}")
+        if epoch is None:
+            # For right now, we only don't pass a value for epoch when we are at the end of training:
+            plt.suptitle(f"Confusion Matrix at train end")
+        else:
+            plt.suptitle(f"Confusion Matrix at Epoch {epoch}")
         cax = fig.add_subplot(1, 11, 11)
         axes = []
         for i in range(self._num_classes):
@@ -207,7 +211,10 @@ class ConfusionMatrixCallback(Callback):
         to WaB.
 
         """
-        self._confusion_matrix()
+        if self._is_multiclass_classification:
+            self._multilabel_confusion_matrix()
+        else:
+            self._binary_confusion_matrix()
 
 
 class TrainValImageCallback(Callback):
